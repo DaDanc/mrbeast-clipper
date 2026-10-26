@@ -10,6 +10,10 @@ on:
         description: "Hashtagovi iz briefa kampanje (npr. #MW4 #MW4partner). Prazno = iz config.yaml"
         required: false
         default: ""
+      broj_klipova:
+        description: "Koliko klipova napraviti (prazno = iz config.yaml)"
+        required: false
+        default: ""
       broj_videa:
         description: "Koliko videa iz mape obraditi (ako je link mapa)"
         required: false
@@ -61,4 +65,5 @@ jobs:
           LINK: ${{ inputs.link }}
           BROJ: ${{ inputs.broj_videa }}
           TAGS: ${{ inputs.hashtagovi }}
-        run: python -m clipper.main make --url "$LINK" --max-videos "$BROJ" --hashtags "$TAGS"
+          KLIPOVI: ${{ inputs.broj_klipova }}
+        run: python -m clipper.main make --url "$LINK" --max-videos "$BROJ" --hashtags "$TAGS" --clips "${KLIPOVI:-0}"
