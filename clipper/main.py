@@ -64,9 +64,11 @@ def fmt_time(s: float) -> str:
     return f"{int(s // 60)}:{int(s % 60):02d}"
 
 
-def cmd_make(url: str, max_videos: int) -> None:
+def cmd_make(url: str, max_videos: int, hashtags: str = "") -> None:
     from . import fetch, highlights, hosting, render, transcribe
 
+    tags = (hashtags or CFG.get("hashtags", "")).strip()
+    print(f"▶ Hashtagovi za objave: {tags or '(nema)'}", flush=True)
     ensure_labels()
     work = ROOT / "work"
     work.mkdir(exist_ok=True)
@@ -95,8 +97,8 @@ def cmd_make(url: str, max_videos: int) -> None:
             video_url = hosting.upload(out, name)
             thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
 
-            caption = CFG["caption_template"].format(hook=clip.hook).strip()
-            yt_title = CFG["youtube_title_template"].format(hook=clip.hook)[:100]
+            caption = CFG["caption_template"].format(hook=clip.hook, hashtags=tags).strip()
+            yt_title = CFG["youtube_title_template"].format(hook=clip.hook, hashtags=tags)[:100]
             data = {"video_url": video_url, "caption": caption, "yt_title": yt_title,
                     "source": video.name, "start": round(clip.start, 2), "end": round(clip.end, 2),
                     "score": round(clip.score, 2)}
@@ -280,13 +282,14 @@ def main() -> None:
     m = sub.add_parser("make")
     m.add_argument("--url", required=True)
     m.add_argument("--max-videos", type=int, default=1)
+    m.add_argument("--hashtags", default="")
     pb = sub.add_parser("publish")
     pb.add_argument("--issue", type=int, required=True)
     sub.add_parser("links")
     sub.add_parser("check")
     a = p.parse_args()
     if a.cmd == "make":
-        cmd_make(a.url, a.max_videos)
+        cmd_make(a.url, a.max_videos, a.hashtags)
     elif a.cmd == "publish":
         cmd_publish(a.issue)
     elif a.cmd == "links":
