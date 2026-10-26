@@ -75,7 +75,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f"{{\\fad(150,250)}}{_esc(clip.hook.upper())}"
     )
 
-    words = _words_in(segments, clip.start, clip.end)
+    words = []
+    for w in _words_in(segments, clip.start, clip.end):
+        # Whisper ponekad razbije "$100,000" na "$100" + ",000" - spoji natrag
+        if words and w.text[:1] in ",.%'" and len(w.text) > 1:
+            p = words[-1]
+            words[-1] = Word(p.start, w.end, p.text + w.text)
+        else:
+            words.append(w)
     cap_y = FG_Y + FG_H + 170
     # grupe do `group` riječi, nova grupa uvijek nakon kraja rečenice
     chunks: list[tuple[int, list[Word]]] = []
