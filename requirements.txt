@@ -1,0 +1,7 @@
+faster-whisper>=1.1.0
+numpy>=1.26
+pyyaml>=6.0
+requests>=2.31
+gdown>=5.2
+yt-dlp
+cloudinary>=1.40
