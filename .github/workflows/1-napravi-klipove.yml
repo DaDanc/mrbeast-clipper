@@ -1,0 +1,58 @@
+name: 1. Napravi klipove
+
+on:
+  workflow_dispatch:
+    inputs:
+      link:
+        description: "Link na materijal kampanje (Google Drive / Dropbox / direktan link)"
+        required: true
+      broj_videa:
+        description: "Koliko videa iz mape obraditi (ako je link mapa)"
+        required: false
+        default: "1"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: make-clips
+  cancel-in-progress: false
+
+jobs:
+  clips:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instaliraj ffmpeg i font
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          mkdir -p fonts
+          curl -sSfL -o fonts/Anton-Regular.ttf \
+            https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf || rm -f fonts/Anton-Regular.ttf
+
+      - name: Instaliraj Python pakete
+        run: pip install -r requirements.txt
+
+      - name: Spremi Whisper model u cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: whisper-${{ hashFiles('config.yaml') }}
+          restore-keys: whisper-
+
+      - name: Napravi klipove
+        env:
+          LINK: ${{ inputs.link }}
+          BROJ: ${{ inputs.broj_videa }}
+        run: python -m clipper.main make --url "$LINK" --max-videos "$BROJ"
