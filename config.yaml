@@ -14,16 +14,19 @@ max_seconds: 55
 # "small" = dobar omjer brzine i točnosti. "base" je brži, "medium" točniji ali spor.
 whisper_model: small
 
-# Tekst objave. {hook} se zamijeni rečenicom iz klipa.
-# Hashtagovi #mrbeast #mrbeastpartner su OBAVEZNI po pravilima kampanje.
-# Ako nova kampanja traži nešto drugo, promijeni ovdje.
+# Hashtagovi. SVAKA KAMPANJA IMA SVOJE i obično zabranjuje sve ostale!
+# Uzmi ih iz briefa kampanje na Vyro. Kad pokrećeš "1. Napravi klipove",
+# možeš ih upisati u polje "hashtagovi" i tada vrijedi to, a ne ovo ovdje.
+hashtags: "#MW4 #MW4partner"
+
+# Tekst objave. {hook} = rečenica iz klipa, {hashtags} = hashtagovi kampanje.
 caption_template: |
   {hook}
 
-  #mrbeast #mrbeastpartner #shorts #fyp
+  {hashtags}
 
-# Naslov za YouTube Shorts (max 100 znakova). {hook} = rečenica iz klipa.
-youtube_title_template: "{hook} #mrbeast #shorts"
+# Naslov za YouTube Shorts (max 100 znakova).
+youtube_title_template: "{hook}"
 
 # Na koje mreže objavljivati (moraju biti povezane u Bufferu).
 # Mogućnosti: tiktok, instagram, youtube
