@@ -35,10 +35,14 @@ platforms:
   - instagram
   - youtube
 
-# Kad objaviti nakon što odobriš klip:
-#   shareNow   = odmah (preporučeno: MrBeast kampanje traju 1-2 dana)
-#   addToQueue = u sljedeći slobodan termin iz tvog Buffer rasporeda
-post_mode: shareNow
+# Kad objaviti:
+#   addToQueue = u sljedeći slobodan termin iz tvog Buffer rasporeda (razmaknuto)
+#   shareNow   = odmah (za kampanje koje traju samo dan-dva)
+post_mode: addToQueue
+
+# Automatsko objavljivanje: koliko najbolje ocijenjenih klipova po videu
+# objaviti BEZ tvog odobrenja. 0 = ništa automatski, sve ručno labelom "objavi".
+auto_publish: 3
 
 # Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
 hype_words:
