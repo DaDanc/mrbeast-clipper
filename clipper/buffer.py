@@ -201,7 +201,8 @@ def scheduled_posts(channel_id: str) -> list[dict]:
              posts(first: 100, input: { organizationId: $org,
                    filter: { status: [scheduled], channelIds: $ch },
                    sort: [{ field: dueAt, direction: asc }] }) {
-               edges { node { id dueAt text } }
+               edges { node { id dueAt text assets { source }
+                              metadata { ... on YoutubePostMetadata { title } } } }
              }
            }""",
         {"org": get_org_id(), "ch": [channel_id]},
@@ -209,7 +210,18 @@ def scheduled_posts(channel_id: str) -> list[dict]:
     return [e["node"] for e in (res.get("edges") or []) if e["node"].get("dueAt")]
 
 
-def set_post_time(post_id: str, due_at: str) -> dict:
+def set_post_time(post: dict, service: str, due_at: str) -> dict:
+    """Promijeni vrijeme objave. Buffer kod izmjene ponovno provjerava cijelu objavu,
+    pa se šalju i tekst, video i postavke mreže."""
+    service = service.lower()
+    inp = {"id": post["id"], "mode": "customScheduled", "dueAt": due_at, "text": post.get("text") or ""}
+    src = next((a.get("source") for a in (post.get("assets") or []) if a.get("source")), None)
+    if src:
+        inp["assets"] = [{"video": {"url": src}}]
+    title = ((post.get("metadata") or {}).get("title")) or (post.get("text") or "").split("\n")[0]
+    meta = build_metadata(service, title)
+    if meta:
+        inp["metadata"] = meta
     res = gql(
         """mutation($input: EditPostInput!) {
              editPost(input: $input) {
@@ -217,7 +229,7 @@ def set_post_time(post_id: str, due_at: str) -> dict:
                ... on MutationError { message }
              }
            }""",
-        {"input": {"id": post_id, "mode": "customScheduled", "dueAt": due_at}},
+        {"input": inp},
     )["editPost"]
     if "post" not in res:
         raise BufferError(res.get("message", str(res)))
