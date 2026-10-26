@@ -1,0 +1,66 @@
+# ==============================================================
+#  POSTAVKE KLIPERA - ovo smiješ mijenjati
+# ==============================================================
+
+# Koliko klipova napraviti iz jednog videa
+clips_per_video: 6
+
+# Dužina klipa u sekundama.
+# MrBeast kampanje na Vyro traže NAJMANJE 20 sekundi.
+min_seconds: 25
+max_seconds: 55
+
+# Whisper model za prepoznavanje govora.
+# "small" = dobar omjer brzine i točnosti. "base" je brži, "medium" točniji ali spor.
+whisper_model: small
+
+# Tekst objave. {hook} se zamijeni rečenicom iz klipa.
+# Hashtagovi #mrbeast #mrbeastpartner su OBAVEZNI po pravilima kampanje.
+# Ako nova kampanja traži nešto drugo, promijeni ovdje.
+caption_template: |
+  {hook}
+
+  #mrbeast #mrbeastpartner #shorts #fyp
+
+# Naslov za YouTube Shorts (max 100 znakova). {hook} = rečenica iz klipa.
+youtube_title_template: "{hook} #mrbeast #shorts"
+
+# Na koje mreže objavljivati (moraju biti povezane u Bufferu).
+# Mogućnosti: tiktok, instagram, youtube
+platforms:
+  - tiktok
+  - instagram
+  - youtube
+
+# Kad objaviti nakon što odobriš klip:
+#   shareNow   = odmah (preporučeno: MrBeast kampanje traju 1-2 dana)
+#   addToQueue = u sljedeći slobodan termin iz tvog Buffer rasporeda
+post_mode: shareNow
+
+# Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
+hype_words:
+  - million
+  - "$"
+  - dollars
+  - win
+  - won
+  - winner
+  - last
+  - eliminated
+  - lose
+  - lost
+  - crazy
+  - insane
+  - impossible
+  - surprise
+  - "oh my god"
+  - "no way"
+  - what
+  - car
+  - house
+  - island
+  - final
+  - challenge
+  - prize
+  - keep
+  - leave
