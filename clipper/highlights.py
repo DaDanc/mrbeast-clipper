@@ -73,7 +73,10 @@ def find_clips(
     n_clips: int,
     min_s: float,
     max_s: float,
+    exclude: list[tuple[float, float]] | None = None,
 ) -> list[Clip]:
+    """exclude = vremenski rasponi već iskorištenih klipova (ne ponavljaj iste momente)."""
+    exclude = exclude or []
     segs = [s for s in segments if s.text]
     total = segs[-1].end if segs else 0
     cands: list[Clip] = []
@@ -121,8 +124,9 @@ def find_clips(
 
     cands.sort(key=lambda c: c.score, reverse=True)
     chosen: list[Clip] = []
+    used = [Clip(a, b, 0, "", "") for a, b in exclude]
     for c in cands:
-        if all(c.end + 5 <= o.start or c.start >= o.end + 5 for o in chosen):
+        if all(c.end + 5 <= o.start or c.start >= o.end + 5 for o in chosen + used):
             chosen.append(c)
         if len(chosen) >= n_clips:
             break
