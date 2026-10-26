@@ -71,6 +71,7 @@ def gql(query: str, variables: dict | None = None) -> dict:
     raise BufferError("Buffer API ne odgovara nakon više pokušaja.")
 
 
+@lru_cache(maxsize=None)
 def get_org_id() -> str:
     orgs = gql("query { account { organizations { id name } } }")["account"]["organizations"]
     if not orgs:
@@ -170,21 +171,54 @@ mutation($input: CreatePostInput!) {
 }"""
 
 
-def create_video_post(channel: dict, text: str, video_url: str, yt_title: str, mode: str = "shareNow") -> dict:
+def create_video_post(channel: dict, text: str, video_url: str, yt_title: str,
+                      mode: str = "shareNow", due_at: str | None = None) -> dict:
     service = channel["service"].lower()
     inp = {
         "channelId": channel["id"],
         "text": text,
         "schedulingType": "automatic",
-        "mode": mode,
+        "mode": "customScheduled" if due_at else mode,
         "assets": [{"video": {"url": video_url, "metadata": {"thumbnailOffset": 1500}}}],
     }
+    if due_at:
+        inp["dueAt"] = due_at
     meta = build_metadata(service, yt_title)
     if meta:
         inp["metadata"] = meta
     if service == "youtube":  # thumbnailOffset podržan samo za IG/TikTok/Pinterest
         inp["assets"] = [{"video": {"url": video_url}}]
     res = gql(CREATE, {"input": inp})["createPost"]
+    if "post" not in res:
+        raise BufferError(res.get("message", str(res)))
+    return res["post"]
+
+
+def scheduled_posts(channel_id: str) -> list[dict]:
+    """Objave koje na kanalu čekaju objavu: [{id, dueAt, text}]."""
+    res = gql(
+        """query($org: OrganizationId!, $ch: [ChannelId!]) {
+             posts(first: 100, input: { organizationId: $org,
+                   filter: { status: [scheduled], channelIds: $ch },
+                   sort: [{ field: dueAt, direction: asc }] }) {
+               edges { node { id dueAt text } }
+             }
+           }""",
+        {"org": get_org_id(), "ch": [channel_id]},
+    )["posts"]
+    return [e["node"] for e in (res.get("edges") or []) if e["node"].get("dueAt")]
+
+
+def set_post_time(post_id: str, due_at: str) -> dict:
+    res = gql(
+        """mutation($input: EditPostInput!) {
+             editPost(input: $input) {
+               ... on PostActionSuccess { post { id dueAt } }
+               ... on MutationError { message }
+             }
+           }""",
+        {"input": {"id": post_id, "mode": "customScheduled", "dueAt": due_at}},
+    )["editPost"]
     if "post" not in res:
         raise BufferError(res.get("message", str(res)))
     return res["post"]
