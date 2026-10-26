@@ -64,9 +64,25 @@ def fmt_time(s: float) -> str:
     return f"{int(s // 60)}:{int(s % 60):02d}"
 
 
-def cmd_make(url: str, max_videos: int, hashtags: str = "") -> None:
+def used_ranges() -> dict[str, list[tuple[float, float]]]:
+    """Već napravljeni klipovi po izvornom videu, da se isti momenti ne ponavljaju."""
+    out: dict[str, list[tuple[float, float]]] = {}
+    try:
+        issues = json.loads(gh("issue", "list", "--state", "all", "--label", L_CLIP, "--limit", "500",
+                               "--json", "body"))
+    except Exception:
+        return out
+    for i in issues:
+        d = read_json_marker(i.get("body") or "", "CLIPDATA")
+        if d and "start" in d and "end" in d:
+            out.setdefault(d.get("source", ""), []).append((float(d["start"]), float(d["end"])))
+    return out
+
+
+def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> None:
     from . import fetch, highlights, hosting, render, transcribe
 
+    n_clips = n_clips or int(CFG["clips_per_video"])
     tags = (hashtags or CFG.get("hashtags", "")).strip()
     print(f"▶ Hashtagovi za objave: {tags or '(nema)'}", flush=True)
     ensure_labels()
@@ -85,8 +101,11 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "") -> None:
             print("  Nema govora u videu, preskačem.")
             continue
         loud = highlights.loudness_per_second(wav)
+        used = used_ranges().get(video.name, [])
+        if used:
+            print(f"  Preskačem {len(used)} već iskorištenih momenata iz ovog videa.", flush=True)
         clips = highlights.find_clips(
-            segs, loud, CFG["hype_words"], CFG["clips_per_video"], CFG["min_seconds"], CFG["max_seconds"]
+            segs, loud, CFG["hype_words"], n_clips, CFG["min_seconds"], CFG["max_seconds"], exclude=used
         )
         stamp = time.strftime("%Y%m%d-%H%M")
         created: list[tuple[float, int]] = []
@@ -231,6 +250,67 @@ def cmd_publish(issue: int) -> None:
         sys.exit(1)
 
 
+# ---------------------------------------------------------------- daily
+def owner_mention() -> str:
+    owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "")
+    return f"@{owner} " if owner else ""
+
+
+def cmd_daily() -> None:
+    """Svaki dan: dopuni Buffer red do `daily_posts` objava najboljim neobjavljenim klipovima."""
+    from datetime import date
+    from . import buffer
+
+    end = str(CFG.get("campaign_end") or "").strip()
+    if end and date.today().isoformat() > end:
+        print(f"Kampanja je završila ({end}), ne objavljujem ništa.")
+        return
+
+    want = int(CFG.get("daily_posts", 3) or 0)
+    channels = buffer.get_channels(CFG["platforms"])
+    if not channels or want <= 0:
+        print("Nema kanala ili je daily_posts = 0.")
+        return
+    waiting = max(len(buffer.scheduled_posts(ch["id"])) for ch in channels)
+    need = max(0, want - waiting)
+    print(f"▶ U Bufferu već čeka {waiting} objava po kanalu, cilj je {want} → objavljujem {need}.")
+    if need == 0:
+        return
+
+    issues = json.loads(gh("issue", "list", "--state", "open", "--label", L_CLIP, "--limit", "200",
+                           "--json", "number,title,body,labels"))
+    cands = []
+    for i in issues:
+        names = {l["name"] for l in i["labels"]}
+        if L_POSTED in names:
+            continue
+        d = read_json_marker(i.get("body") or "", "CLIPDATA")
+        if d:
+            cands.append((float(d.get("score", 0)), i["number"], i["title"]))
+    cands.sort(reverse=True)
+
+    if not cands:
+        tracker = tracker_issue()
+        comment(tracker, f"{owner_mention()}⚠️ **Ponestalo je klipova.** Sutra nema objava dok ne pokreneš "
+                         "**1. Napravi klipove** s materijalom nove (ili iste) kampanje.")
+        print("Nema neobjavljenih klipova – poslana obavijest.")
+        return
+
+    for score, num, title in cands[:need]:
+        print(f"  → #{num} (ocjena {score:.1f}) {title}")
+        try:
+            gh("issue", "edit", str(num), "--add-label", L_APPROVE)
+            cmd_publish(num)
+        except (Exception, SystemExit) as e:
+            print(f"  ⚠️ #{num} nije objavljen: {e}")
+
+    left = len(cands) - min(need, len(cands))
+    if left < want:
+        tracker = tracker_issue()
+        comment(tracker, f"{owner_mention()}ℹ️ Ostalo je još samo **{left}** neobjavljenih klipova. "
+                         "Uskoro pokreni **1. Napravi klipove** da objave ne stanu.")
+
+
 # ---------------------------------------------------------------- reschedule
 def cmd_reschedule() -> None:
     """Sve objave koje čekaju u Bufferu presloži na termine iz config post_times."""
@@ -310,7 +390,8 @@ def cmd_links() -> None:
         text = "\n".join(results) or "- (nema objava)"
         comment(n, "### 🔗 Linkovi za Vyro\n" + text)
         tracker = tracker or tracker_issue()
-        comment(tracker, f"**{iss['title']}** (#{n})\n{text}")
+        comment(tracker, f"{owner_mention()}🔔 **Objavljeno: {iss['title']}** (#{n})\n{text}\n\n"
+                         "Predaj TikTok i YouTube link na Vyro → kampanja → **Submit Post**.")
         gh("issue", "edit", str(n), "--add-label", L_LINKS)
         gh("issue", "close", str(n))
         print(f"#{n}: linkovi skupljeni.")
@@ -362,14 +443,18 @@ def main() -> None:
     m.add_argument("--url", required=True)
     m.add_argument("--max-videos", type=int, default=1)
     m.add_argument("--hashtags", default="")
+    m.add_argument("--clips", type=int, default=0)
     pb = sub.add_parser("publish")
     pb.add_argument("--issue", type=int, required=True)
     sub.add_parser("links")
     sub.add_parser("check")
     sub.add_parser("reschedule")
+    sub.add_parser("daily")
     a = p.parse_args()
     if a.cmd == "make":
-        cmd_make(a.url, a.max_videos, a.hashtags)
+        cmd_make(a.url, a.max_videos, a.hashtags, a.clips)
+    elif a.cmd == "daily":
+        cmd_daily()
     elif a.cmd == "publish":
         cmd_publish(a.issue)
     elif a.cmd == "links":
