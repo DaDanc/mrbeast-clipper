@@ -6,6 +6,10 @@ on:
       link:
         description: "Link na materijal kampanje (Google Drive / Dropbox / direktan link)"
         required: true
+      hashtagovi:
+        description: "Hashtagovi iz briefa kampanje (npr. #MW4 #MW4partner). Prazno = iz config.yaml"
+        required: false
+        default: ""
       broj_videa:
         description: "Koliko videa iz mape obraditi (ako je link mapa)"
         required: false
@@ -55,4 +59,5 @@ jobs:
         env:
           LINK: ${{ inputs.link }}
           BROJ: ${{ inputs.broj_videa }}
-        run: python -m clipper.main make --url "$LINK" --max-videos "$BROJ"
+          TAGS: ${{ inputs.hashtagovi }}
+        run: python -m clipper.main make --url "$LINK" --max-videos "$BROJ" --hashtags "$TAGS"
