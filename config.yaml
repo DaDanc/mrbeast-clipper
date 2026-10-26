@@ -36,9 +36,18 @@ platforms:
   - youtube
 
 # Kad objaviti:
-#   addToQueue = u sljedeći slobodan termin iz tvog Buffer rasporeda (razmaknuto)
-#   shareNow   = odmah (za kampanje koje traju samo dan-dva)
-post_mode: addToQueue
+#   schedule   = u sljedeći slobodan termin iz post_times ispod (preporučeno)
+#   addToQueue = u sljedeći slobodan termin iz Buffer rasporeda
+#   shareNow   = odmah
+post_mode: schedule
+
+# Termini objava (po tvom vremenu). Publika je uglavnom iz SAD-a:
+# 18:00 = 12h u New Yorku, 20:30 = 14:30h, 23:00 = 17h.
+timezone: Europe/Zagreb
+post_times:
+  - "18:00"
+  - "20:30"
+  - "23:00"
 
 # Automatsko objavljivanje: koliko najbolje ocijenjenih klipova po videu
 # objaviti BEZ tvog odobrenja. 0 = ništa automatski, sve ručno labelom "objavi".
