@@ -1,0 +1,29 @@
+name: 5. Dnevne objave
+
+on:
+  schedule:
+    - cron: "0 16 * * *"   # svaki dan u 17:00 po zagrebačkom vremenu (zimsko)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: daily
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pyyaml requests
+      - name: Dopuni red objava
+        run: python -m clipper.main daily
