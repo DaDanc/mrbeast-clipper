@@ -144,6 +144,43 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "") -> None:
     print(f"✅ Gotovo: napravljeno {made} klipova.")
 
 
+# ---------------------------------------------------------------- termini
+def _parse_iso(s: str):
+    from datetime import datetime
+    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+def next_slot(taken: list) -> "datetime":
+    """Prvi slobodan termin iz config post_times (najmanje 15 min od sada,
+    najmanje 30 min razmaka od već zakazanih objava na tom kanalu)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo(CFG.get("timezone", "Europe/Zagreb"))
+    now = datetime.now(tz) + timedelta(minutes=15)
+    times = sorted(CFG.get("post_times") or ["18:00", "20:30", "23:00"])
+    for day in range(0, 60):
+        d = (now + timedelta(days=day)).date()
+        for t in times:
+            hh, mm = (int(x) for x in t.split(":"))
+            slot = datetime(d.year, d.month, d.day, hh, mm, tzinfo=tz)
+            if slot < now:
+                continue
+            if all(abs((slot - x).total_seconds()) >= 30 * 60 for x in taken):
+                return slot
+    raise RuntimeError("Nema slobodnog termina u sljedećih 60 dana.")
+
+
+def _utc_iso(dt) -> str:
+    from datetime import timezone
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def _local(dt) -> str:
+    from zoneinfo import ZoneInfo
+    return dt.astimezone(ZoneInfo(CFG.get("timezone", "Europe/Zagreb"))).strftime("%d.%m. u %H:%M")
+
+
 # ---------------------------------------------------------------- publish
 def cmd_publish(issue: int) -> None:
     from . import buffer
@@ -171,9 +208,17 @@ def cmd_publish(issue: int) -> None:
     done, lines = {}, []
     for ch in channels:
         try:
-            post = buffer.create_video_post(ch, data["caption"], data["video_url"], data["yt_title"], mode)
+            due = None
+            when = "poslano u Buffer"
+            if mode == "schedule":
+                taken = [_parse_iso(p["dueAt"]) for p in buffer.scheduled_posts(ch["id"])]
+                slot = next_slot(taken)
+                due = _utc_iso(slot)
+                when = f"zakazano za {_local(slot)}"
+            post = buffer.create_video_post(ch, data["caption"], data["video_url"], data["yt_title"],
+                                            mode, due_at=due)
             done[post["id"]] = ch["service"]
-            lines.append(f"- ✅ **{ch['service']}** ({ch['name']}): poslano u Buffer")
+            lines.append(f"- ✅ **{ch['service']}** ({ch['name']}): {when}")
         except Exception as e:
             lines.append(f"- ❌ **{ch['service']}** ({ch['name']}): {e}")
     marker = json.dumps({"posts": done})
@@ -184,6 +229,27 @@ def cmd_publish(issue: int) -> None:
         gh("issue", "edit", str(issue), "--add-label", L_POSTED)
     else:
         sys.exit(1)
+
+
+# ---------------------------------------------------------------- reschedule
+def cmd_reschedule() -> None:
+    """Sve objave koje čekaju u Bufferu presloži na termine iz config post_times."""
+    from . import buffer
+
+    for ch in buffer.get_channels(CFG["platforms"]):
+        posts = buffer.scheduled_posts(ch["id"])
+        print(f"▶ {ch['service']} ({ch['name']}): {len(posts)} objava čeka")
+        taken: list = []
+        for p in posts:
+            slot = next_slot(taken)
+            taken.append(slot)
+            old = _local(_parse_iso(p["dueAt"]))
+            try:
+                buffer.set_post_time(p["id"], _utc_iso(slot))
+                print(f"   {old} → {_local(slot)}   {p['text'][:50]!r}")
+            except Exception as e:
+                print(f"   ⚠️ {p['text'][:50]!r}: {e}")
+    print("✅ Gotovo.")
 
 
 # ---------------------------------------------------------------- links
@@ -300,6 +366,7 @@ def main() -> None:
     pb.add_argument("--issue", type=int, required=True)
     sub.add_parser("links")
     sub.add_parser("check")
+    sub.add_parser("reschedule")
     a = p.parse_args()
     if a.cmd == "make":
         cmd_make(a.url, a.max_videos, a.hashtags)
@@ -307,6 +374,8 @@ def main() -> None:
         cmd_publish(a.issue)
     elif a.cmd == "links":
         cmd_links()
+    elif a.cmd == "reschedule":
+        cmd_reschedule()
     else:
         cmd_check()
 
