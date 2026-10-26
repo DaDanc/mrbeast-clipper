@@ -89,6 +89,7 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "") -> None:
             segs, loud, CFG["hype_words"], CFG["clips_per_video"], CFG["min_seconds"], CFG["max_seconds"]
         )
         stamp = time.strftime("%Y%m%d-%H%M")
+        created: list[tuple[float, int]] = []
         for ci, clip in enumerate(clips):
             name = f"{stamp}-v{vi}-c{ci}"
             out = work / f"{name}.mp4"
@@ -125,10 +126,22 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "") -> None:
             title = f"🎬 {clip.hook[:70]}"
             with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
                 f.write(body)
-            gh("issue", "create", "--title", title, "--body-file", f.name, "--label", L_CLIP)
+            url_issue = gh("issue", "create", "--title", title, "--body-file", f.name, "--label", L_CLIP)
+            created.append((clip.score, int(url_issue.rstrip("/").split("/")[-1])))
             out.unlink(missing_ok=True)
             made += 1
-    print(f"✅ Gotovo: {made} klipova čeka tvoj pregled u Issues.")
+
+        n_auto = int(CFG.get("auto_publish", 0) or 0)
+        if n_auto > 0 and created:
+            best = sorted(created, reverse=True)[:n_auto]
+            print(f"▶ Automatski objavljujem {len(best)} najbolja klipa: {[n for _, n in best]}", flush=True)
+            for _, num in best:
+                try:
+                    gh("issue", "edit", str(num), "--add-label", L_APPROVE)
+                    cmd_publish(num)
+                except (Exception, SystemExit) as e:
+                    print(f"  ⚠️ Issue #{num} nije objavljen: {e}")
+    print(f"✅ Gotovo: napravljeno {made} klipova.")
 
 
 # ---------------------------------------------------------------- publish
