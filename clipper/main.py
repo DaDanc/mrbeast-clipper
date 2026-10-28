@@ -360,7 +360,9 @@ def cmd_daily() -> None:
             gh("issue", "edit", str(num), "--add-label", L_APPROVE)
             cmd_publish(num)
         except (Exception, SystemExit) as e:
-            print(f"  ⚠️ #{num} nije objavljen: {e}")
+            import traceback
+            tb = traceback.format_exc().strip().splitlines()[-6:]
+            print(f"::error::#{num} nije objavljen: {e!r} | " + " / ".join(x.strip() for x in tb))
 
     left = len(cands) - min(need, len(cands))
     if left < want:
