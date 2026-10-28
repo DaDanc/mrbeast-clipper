@@ -27,7 +27,7 @@ def _esc(text: str) -> str:
 
 def _ass(text: str, duration: float, path: Path) -> Path:
     font = _font()
-    size = 84 if font == "Anton" else 70
+    size = 100 if font == "Anton" else 80
     # tekst stoji tik iznad srednjeg videa (Alignment 2 = dolje-sredina, MarginV od dna ekrana)
     margin_v = H - (FG_Y - 45)
     header = f"""[Script Info]
