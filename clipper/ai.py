@@ -52,6 +52,9 @@ def _ask_gemini(prompt: str, models: list[str]) -> str:
                 parts = r.json()["candidates"][0]["content"]["parts"]
                 return "".join(p.get("text", "") for p in parts)
             last = f"{model}: HTTP {r.status_code} {r.text[:300]}"
+            print(f"  ⚠️ {last}", flush=True)
+            if r.status_code == 429 and "quota" in r.text.lower() and "per day" in r.text.lower():
+                break  # dnevna kvota potrošena – nema smisla čekati, probaj drugi model
             if r.status_code in (429, 500, 503):  # zauzeto - pričekaj pa probaj opet
                 time.sleep(20 * (attempt + 1))
                 continue

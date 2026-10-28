@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
+      PYTHONUNBUFFERED: "1"
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
       CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

@@ -32,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     env:
+      PYTHONUNBUFFERED: "1"
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

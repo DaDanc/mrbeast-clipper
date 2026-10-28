@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      PYTHONUNBUFFERED: "1"
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
     steps:
