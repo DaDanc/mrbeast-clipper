@@ -83,7 +83,7 @@ def used_ranges() -> dict[str, list[tuple[float, float]]]:
 
 
 def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> None:
-    from . import fetch, highlights, hosting, render, transcribe
+    from . import ai, fetch, highlights, hosting, render, transcribe
 
     n_clips = n_clips or int(CFG["clips_per_video"])
     tags = (hashtags or CFG.get("hashtags", "")).strip()
@@ -110,27 +110,40 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) ->
         used = used_ranges().get(video.name, [])
         if used:
             print(f"  Preskačem {len(used)} već iskorištenih momenata iz ovog videa.", flush=True)
-        clips = highlights.find_clips(
-            segs, loud, CFG["hype_words"], n_clips, CFG["min_seconds"], CFG["max_seconds"], exclude=used
-        )
+        clips = []
+        if CFG.get("ai_izbor", True) and ai.available():
+            try:
+                clips = ai.pick_clips(segs, n_clips, CFG["min_seconds"], CFG["max_seconds"], CFG, exclude=used)
+            except Exception as e:
+                print(f"  ⚠️ AI odabir nije uspio ({e}) – biram po starom.", flush=True)
+        elif CFG.get("ai_izbor", True):
+            print("  ℹ️ Nema AI ključa (GEMINI_API_KEY) – biram po glasnoći i ključnim riječima.", flush=True)
+        if not clips:
+            clips = highlights.find_clips(
+                segs, loud, CFG["hype_words"], n_clips, CFG["min_seconds"], CFG["max_seconds"], exclude=used
+            )
         stamp = time.strftime("%Y%m%d-%H%M")
         created: list[tuple[float, int]] = []
         for ci, clip in enumerate(clips):
             name = f"{stamp}-v{vi}-c{ci}"
             out = work / f"{name}.mp4"
             print(f"▶ Renderiram klip {ci + 1}/{len(clips)} ({fmt_time(clip.start)}-{fmt_time(clip.end)})", flush=True)
-            render.render(video, clip, segs, out, work, show_hook=bool(CFG.get("naslov_na_videu", True)))
+            nv = CFG.get("naslov_na_videu", "auto")
+            show_hook = clip.ai if str(nv).lower() == "auto" else bool(nv)
+            render.render(video, clip, segs, out, work, show_hook=show_hook)
             video_url = hosting.upload(out, name)
             thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
 
-            caption = CFG["caption_template"].format(hook=clip.hook, hashtags=tags).strip()
-            yt_title = CFG["youtube_title_template"].format(hook=clip.hook, hashtags=tags)[:100]
+            desc = clip.caption or clip.hook
+            caption = CFG["caption_template"].format(hook=desc, hashtags=tags).strip()
+            yt_title = CFG["youtube_title_template"].format(hook=clip.hook if clip.ai else desc, hashtags=tags)[:100]
             data = {"video_url": video_url, "caption": caption, "yt_title": yt_title,
                     "source": video.name, "start": round(clip.start, 2), "end": round(clip.end, 2),
-                    "score": round(clip.score, 2)}
+                    "score": round(clip.score, 2), "ai": clip.ai}
+            grade = f"🤖 AI ocjena {clip.score:.0f}/10" if clip.ai else f"ocjena {clip.score:.1f}"
             body = f"""[![pregled]({thumb})]({video_url})
 
-**▶️ [Pogledaj klip]({video_url})** · {clip.duration:.0f} s · iz `{video.name}` ({fmt_time(clip.start)}–{fmt_time(clip.end)}) · ocjena {clip.score:.1f}
+**▶️ [Pogledaj klip]({video_url})** · {clip.duration:.0f} s · iz `{video.name}` ({fmt_time(clip.start)}–{fmt_time(clip.end)}) · {grade}
 
 **Opis objave:**
 ```
@@ -148,7 +161,7 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) ->
 
 <!--CLIPDATA {json.dumps(data, ensure_ascii=False)} -->
 """
-            title = f"🎬 {clip.hook[:70]}"
+            title = f"{'🤖' if clip.ai else '🎬'} {clip.hook[:70]}"
             with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
                 f.write(body)
             url_issue = gh("issue", "create", "--title", title, "--body-file", f.name, "--label", L_CLIP)
@@ -302,20 +315,19 @@ def cmd_daily() -> None:
         names = {l["name"] for l in i["labels"]}
         if L_POSTED in names or i["number"] in skip:
             continue
-        # samo klipovi koje je Claude provjerio (imaju ručni opis u configu)
-        if CFG.get("samo_provjereni") and i["number"] not in reviewed:
-            continue
         d = read_json_marker(i.get("body") or "", "CLIPDATA")
+        # samo provjereni klipovi: ručni opis u configu ILI ih je odabrao i ocijenio AI
+        if CFG.get("samo_provjereni") and i["number"] not in reviewed and not (d and d.get("ai")):
+            continue
         # samo klipovi trenutne kampanje (opis mora sadržavati njezine hashtagove)
         if d and tags and tags not in d.get("caption", ""):
             continue
         if d:
             cands.append((float(d.get("score", 0)), i["number"], i["title"]))
-    cands.sort(reverse=True)
-    if CFG.get("samo_provjereni"):
-        # redoslijed objava = redoslijed u config "opisi" (Claude ga slaže nakon provjere)
-        order = [int(x) for x in (CFG.get("opisi") or {})]
-        cands.sort(key=lambda c: order.index(c[1]) if c[1] in order else 10**6)
+    cands.sort(reverse=True)  # AI klipovi: najbolja ocjena prva
+    # ručno složeni redoslijed iz config "opisi" ide ispred AI klipova
+    order = [int(x) for x in (CFG.get("opisi") or {})]
+    cands.sort(key=lambda c: order.index(c[1]) if c[1] in order else 10**6)
 
     if not cands:
         tracker = tracker_issue()
@@ -460,6 +472,17 @@ def cmd_check() -> None:
     else:
         print("  ❌ secret CLOUDINARY_URL nedostaje ili ne počinje s cloudinary://")
         ok = False
+    print("▶ AI za odabir klipova...")
+    from . import ai
+    if not ai.available():
+        print("  ℹ️ nema secreta GEMINI_API_KEY – klipovi se biraju bez AI-ja (lošije)")
+    else:
+        try:
+            out = ai.parse_json(ai.ask('Answer only with JSON: {"ok": true}', CFG))
+            print(f"  ✅ radi ({ai.provider()})" if out.get("ok") else f"  ⚠️ čudan odgovor: {out}")
+        except Exception as e:
+            print(f"  ❌ {e}")
+            ok = False
     print("\n✅ SVE SPREMNO" if ok else "\n❌ Nešto ne valja – pogledaj gore.")
     sys.exit(0 if ok else 1)
 

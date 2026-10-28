@@ -135,3 +135,20 @@ clipper/buffer.py           objava preko Buffer API-ja
 clipper/main.py             povezuje sve s GitHub Issuesima
 .github/workflows/          4 automatska procesa
 ```
+
+## 🤖 AI odabir klipova
+
+Kad postoji secret **`GEMINI_API_KEY`**, workflow **1. Napravi klipove** daje cijeli transkript AI-ju. AI:
+- bira momente koji imaju smisla bez konteksta (počinju i završavaju na granici misli)
+- odbacuje loše (prekinute, osjetljive, krivo prepoznat govor, reklame)
+- piše **hook na videu** i **opis objave**
+- daje ocjenu 1–10, a klipovi ispod `ai_min_ocjena` se ne prave
+
+Takvi klipovi imaju 🤖 u naslovu Issuea i **5. Dnevne objave** ih objavljuju same, najbolje ocijenjene prve.
+Ručni opisi u `opisi:` i dalje imaju prednost.
+
+**Ključ (besplatno):** aistudio.google.com/apikey → Create API key → zalijepi ga u
+GitHub → Settings → Secrets and variables → Actions → New secret, ime `GEMINI_API_KEY`.
+Provjeri s workflowom **0. Provjeri postavke**.
+
+Kad mijenjaš kampanju, promijeni `brief:` i `hashtags:` u `config.yaml`.

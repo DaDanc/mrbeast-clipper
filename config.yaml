@@ -27,8 +27,39 @@ caption_template: |
   Joy 101 with Hoda Kotb, an iHeart podcast. New episodes every Wednesday on YouTube. {hashtags}
 
 # Naslov (hook) velikim slovima na vrhu videa u prve 4 s.
-# Isključeno jer automatski hook često bude komad rečenice, a ne može se kasnije promijeniti.
-naslov_na_videu: false
+#   auto  = samo kad je klip odabrao AI (on piše pravi hook, a ne komad rečenice)
+#   true / false = uvijek / nikad
+naslov_na_videu: auto
+
+# ==============================================================
+#  AI ODABIR KLIPOVA
+# ==============================================================
+# AI pročita cijeli transkript, izabere najbolje momente, odbaci loše
+# (izvan konteksta, prekinute, osjetljive) i napiše hook i opis.
+# Treba secret GEMINI_API_KEY (besplatan, aistudio.google.com/apikey)
+# ili ANTHROPIC_API_KEY. Bez ključa radi stari način.
+ai_izbor: true
+
+# Klipovi s AI ocjenom ispod ovoga se ne prave (1-10).
+ai_min_ocjena: 7
+
+# Gemini modeli redom – ako prvi ne radi, probava sljedeći.
+ai_gemini_modeli:
+  - gemini-3.8-flash
+  - gemini-3.6-flash
+  - gemini-3.5-flash-lite
+
+# Ako koristiš Claude ključ umjesto Geminija:
+ai_claude_model: claude-haiku-5-5
+
+# Pravila kampanje koja AI mora poštovati. PROMIJENI kad mijenjaš kampanju!
+brief: |
+  Campaign: Joy 101 with Hoda Kotb (iHeartPodcasts), a podcast where Hoda talks with
+  celebrity guests about joy, family, career and life lessons.
+  - Clips must be at least 30 seconds long.
+  - Feature the guest telling a story or Hoda and the guest reacting; avoid parts where
+    only Hoda talks about the app, sponsors, or promotes the show.
+  - Keep it positive and respectful of the guest; nothing that misrepresents what they said.
 
 # Naslov za YouTube Shorts (max 100 znakova).
 youtube_title_template: "{hook}"
@@ -95,7 +126,8 @@ preskoci:
 # Klipovi čiji se trenutak smije izrezati ponovo (npr. loš render).
 napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29]
 
-# Dnevne objave uzimaju SAMO klipove koje je Claude provjerio (imaju opis ispod).
+# Dnevne objave uzimaju SAMO provjerene klipove: one s opisom ispod
+# ili one koje je odabrao i ocijenio AI (🤖 u naslovu Issuea).
 samo_provjereni: true
 
 # Ručno napisani opisi (umjesto automatskog hooka). Broj Issuea: tekst.

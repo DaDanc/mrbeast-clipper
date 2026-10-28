@@ -24,6 +24,8 @@ class Clip:
     score: float
     hook: str
     text: str
+    caption: str = ""   # opis objave koji je napisao AI (prazno = koristi hook)
+    ai: bool = False    # True = AI je odabrao i provjerio ovaj klip
 
     @property
     def duration(self) -> float:
