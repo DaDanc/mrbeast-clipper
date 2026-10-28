@@ -216,6 +216,15 @@ def cmd_publish(issue: int) -> None:
     if not data:
         comment(issue, "⚠️ U ovom Issueu nema podataka o klipu, ne mogu objaviti.")
         return
+    if int(issue) in {int(x) for x in (CFG.get("preskoci") or [])}:
+        comment(issue, "⛔ Ovaj klip nije prošao provjeru prema briefu kampanje – ne objavljujem.")
+        return
+    # ručno napisan opis (config "opisi") ima prednost pred automatskim hookom
+    custom = (CFG.get("opisi") or {}).get(int(issue)) or (CFG.get("opisi") or {}).get(str(issue))
+    if custom:
+        tags = str(CFG.get("hashtags", "") or "").strip()
+        data["caption"] = CFG["caption_template"].format(hook=custom, hashtags=tags).strip()
+        data["yt_title"] = CFG["youtube_title_template"].format(hook=custom, hashtags=tags)[:100]
 
     mode = CFG.get("post_mode", "shareNow")
     try:
