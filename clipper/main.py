@@ -279,12 +279,16 @@ def cmd_daily() -> None:
 
     issues = json.loads(gh("issue", "list", "--state", "open", "--label", L_CLIP, "--limit", "200",
                            "--json", "number,title,body,labels"))
+    tags = str(CFG.get("hashtags", "") or "").strip()
     cands = []
     for i in issues:
         names = {l["name"] for l in i["labels"]}
         if L_POSTED in names:
             continue
         d = read_json_marker(i.get("body") or "", "CLIPDATA")
+        # samo klipovi trenutne kampanje (opis mora sadržavati njezine hashtagove)
+        if d and tags and tags not in d.get("caption", ""):
+            continue
         if d:
             cands.append((float(d.get("score", 0)), i["number"], i["title"]))
     cands.sort(reverse=True)
