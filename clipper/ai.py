@@ -35,30 +35,46 @@ def available() -> bool:
 
 # ---------------------------------------------------------------- pozivi API-ja
 def _ask_gemini(prompt: str, models: list[str]) -> str:
+    """Probava modele redom. Ako je model zauzet (503/429), odmah ide na sljedeći;
+    tek kad su svi zauzeti, malo pričeka i krene ispočetka (najviše 4 kruga)."""
     key = os.environ["GEMINI_API_KEY"].strip()
     last = None
-    for model in models:
-        for attempt in range(3):
-            r = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-                json={
-                    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"},
-                },
-                timeout=300,
-            )
+    dead: set[str] = set()  # modeli koji ne postoje ili im je dnevna kvota potrošena
+    for rnd in range(4):
+        for model in models:
+            if model in dead:
+                continue
+            try:
+                r = requests.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+                    json={
+                        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                        "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"},
+                    },
+                    timeout=300,
+                )
+            except requests.RequestException as e:
+                last = f"{model}: {e}"
+                print(f"  ⚠️ {last}", flush=True)
+                continue
             if r.status_code == 200:
                 parts = r.json()["candidates"][0]["content"]["parts"]
+                if rnd or last:
+                    print(f"  ✅ odgovorio {model}", flush=True)
                 return "".join(p.get("text", "") for p in parts)
-            last = f"{model}: HTTP {r.status_code} {r.text[:300]}"
-            print(f"  ⚠️ {last}", flush=True)
-            if r.status_code == 429 and "quota" in r.text.lower() and "per day" in r.text.lower():
-                break  # dnevna kvota potrošena – nema smisla čekati, probaj drugi model
-            if r.status_code in (429, 500, 503):  # zauzeto - pričekaj pa probaj opet
-                time.sleep(20 * (attempt + 1))
-                continue
-            break  # npr. 404 = model ne postoji, probaj sljedeći
+            msg = r.text.lower()
+            last = f"{model}: HTTP {r.status_code} {r.text[:200]}"
+            print(f"  ⚠️ {model}: HTTP {r.status_code}", flush=True)
+            if r.status_code in (400, 401, 403) and ("api key" in msg or "permission" in msg):
+                raise RuntimeError(f"Gemini ključ ne valja: {last}")
+            if r.status_code not in (429, 500, 503) or "per day" in msg:
+                dead.add(model)  # ne postoji / dnevna kvota – ne probavaj ga više
+        if len(dead) == len(models):
+            break
+        wait = 15 * (rnd + 1)
+        print(f"  … svi modeli zauzeti, čekam {wait} s", flush=True)
+        time.sleep(wait)
     raise RuntimeError(f"Gemini nije odgovorio: {last}")
 
 
