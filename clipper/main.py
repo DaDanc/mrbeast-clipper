@@ -437,6 +437,76 @@ def cmd_links() -> None:
         print(f"#{n}: linkovi skupljeni.")
 
 
+# ---------------------------------------------------------------- views
+def _tiktok_views(url: str) -> int | None:
+    """Broj pregleda TikTok videa (yt-dlp, a ako ne uspije – iz HTML-a stranice)."""
+    try:
+        res = subprocess.run(["yt-dlp", "--dump-single-json", "--skip-download", "--no-warnings", url],
+                             capture_output=True, text=True, timeout=90)
+        if res.returncode == 0:
+            v = json.loads(res.stdout).get("view_count")
+            if v is not None:
+                return int(v)
+    except Exception:
+        pass
+    try:
+        import requests
+        html = requests.get(url, timeout=30, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"}).text
+        m = re.search(r'"playCount":\s*"?(\d+)', html)
+        if m:
+            return int(m.group(1))
+    except Exception:
+        pass
+    return None
+
+
+def cmd_views() -> None:
+    """Javi (s @mention) kad TikTok objava prijeđe pragove pregleda iz config "obavijest_pregledi"."""
+    from datetime import datetime, timedelta, timezone
+
+    limits = sorted(int(x) for x in (CFG.get("obavijest_pregledi") or [1000, 5000]))
+    days = int(CFG.get("prati_dana", 7))
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    issues = json.loads(gh("issue", "list", "--state", "all", "--label", L_LINKS, "--limit", "100",
+                           "--json", "number,title,closedAt,createdAt"))
+    tracker = None
+    for iss in issues:
+        when = iss.get("closedAt") or iss.get("createdAt")
+        if when and datetime.fromisoformat(when.replace("Z", "+00:00")) < since:
+            continue
+        n = iss["number"]
+        comments = json.loads(gh("issue", "view", str(n), "--json", "comments"))["comments"]
+        url, done = None, set()
+        for c in comments:
+            m = re.search(r"https://(?:www\.|vm\.)?tiktok\.com/\S+", c["body"])
+            if m and "Linkovi za Vyro" in c["body"]:
+                url = m.group(0).rstrip(").,")
+            mk = read_json_marker(c["body"], "VIEWS")
+            if mk:
+                done.update(int(x) for x in mk.get("done", []))
+        if not url:
+            continue
+        views = _tiktok_views(url)
+        if views is None:
+            print(f"#{n}: ne mogu dohvatiti preglede ({url})")
+            continue
+        new = [l for l in limits if views >= l and l not in done]
+        print(f"#{n}: {views} pregleda" + (f" → obavijest za {new}" if new else ""))
+        if not new:
+            continue
+        top = max(new)
+        done.update(new)
+        comment(n, f"📈 TikTok: **{views:,}** pregleda\n\n<!--VIEWS {json.dumps({'done': sorted(done)})} -->")
+        tracker = tracker or tracker_issue()
+        extra = ("Ako ga još nisi predao na Vyro – **predaj odmah**." if top < 5000
+                 else "Prešao je 5.000 – Vyro bi ga sad trebao odobriti ako je predan.")
+        comment(tracker, f"{owner_mention()}🚀 **TikTok klip je prešao {top:,} pregleda** "
+                         f"({views:,}) – {iss['title']} (#{n})\n{url}\n\n{extra}")
+
+
 # ---------------------------------------------------------------- check
 def cmd_check() -> None:
     from . import buffer
@@ -501,6 +571,7 @@ def main() -> None:
     sub.add_parser("check")
     sub.add_parser("reschedule")
     sub.add_parser("daily")
+    sub.add_parser("views")
     a = p.parse_args()
     if a.cmd == "make":
         cmd_make(a.url, a.max_videos, a.hashtags, a.clips)
@@ -512,6 +583,8 @@ def main() -> None:
         cmd_links()
     elif a.cmd == "reschedule":
         cmd_reschedule()
+    elif a.cmd == "views":
+        cmd_views()
     else:
         cmd_check()
 

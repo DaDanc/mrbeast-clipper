@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install pyyaml requests
+      - run: pip install pyyaml requests yt-dlp
       - name: Skupi linkove
         run: python -m clipper.main links
+      - name: Provjeri preglede (obavijest na 1k / 5k)
+        run: python -m clipper.main views
