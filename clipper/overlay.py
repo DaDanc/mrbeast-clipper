@@ -10,7 +10,19 @@ from pathlib import Path
 
 import requests
 
-from .render import FG_Y, FONTS_DIR, H, W, _esc, _font
+# iste mjere kao u render.py (ne uvozimo render jer on traži numpy/whisper)
+W, H = 1080, 1920
+FG_H = 810
+FG_Y = (H - FG_H) // 2
+FONTS_DIR = Path(__file__).resolve().parent.parent / "fonts"
+
+
+def _font() -> str:
+    return "Anton" if (FONTS_DIR / "Anton-Regular.ttf").exists() else "DejaVu Sans"
+
+
+def _esc(text: str) -> str:
+    return text.replace("\\", "").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
 def _ass(text: str, duration: float, path: Path) -> Path:
