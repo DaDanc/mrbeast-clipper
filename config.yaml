@@ -3,12 +3,12 @@
 # ==============================================================
 
 # Koliko klipova napraviti iz jednog videa
-clips_per_video: 6
+clips_per_video: 8
 
 # Dužina klipa u sekundama.
-# MrBeast kampanje na Vyro traže NAJMANJE 20 sekundi.
-min_seconds: 25
-max_seconds: 55
+# Joy 101 traži NAJMANJE 30 sekundi (32 radi sigurnosti).
+min_seconds: 32
+max_seconds: 58
 
 # Whisper model za prepoznavanje govora.
 # "small" = dobar omjer brzine i točnosti. "base" je brži, "medium" točniji ali spor.
@@ -17,13 +17,14 @@ whisper_model: small
 # Hashtagovi. SVAKA KAMPANJA IMA SVOJE i obično zabranjuje sve ostale!
 # Uzmi ih iz briefa kampanje na Vyro. Kad pokrećeš "1. Napravi klipove",
 # možeš ih upisati u polje "hashtagovi" i tada vrijedi to, a ne ovo ovdje.
-hashtags: "#MW4 #MW4partner"
+hashtags: "#iHeartPodcasts"
 
 # Tekst objave. {hook} = rečenica iz klipa, {hashtags} = hashtagovi kampanje.
+# Joy 101: obavezni tekst kampanje mora biti u svakom opisu.
 caption_template: |
   {hook}
 
-  {hashtags}
+  Joy 101 with Hoda Kotb, an iHeart podcast. New episodes every Wednesday on YouTube. {hashtags}
 
 # Naslov za YouTube Shorts (max 100 znakova).
 youtube_title_template: "{hook}"
@@ -63,28 +64,34 @@ auto_publish: 3
 
 # Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
 hype_words:
-  - million
-  - "$"
-  - dollars
-  - win
-  - won
-  - winner
-  - last
-  - eliminated
-  - lose
+  - joy
+  - cry
+  - cried
+  - tears
+  - laugh
+  - funny
+  - honestly
+  - truth
+  - never told
+  - secret
+  - scared
+  - afraid
+  - diagnosis
+  - cancer
   - lost
-  - crazy
-  - insane
-  - impossible
-  - surprise
+  - loss
+  - died
+  - grief
+  - divorce
+  - breakup
+  - love
+  - mom
+  - dad
+  - kids
+  - changed my life
+  - hardest
+  - worst
+  - best
   - "oh my god"
   - "no way"
-  - what
-  - car
-  - house
-  - island
-  - final
-  - challenge
-  - prize
-  - keep
-  - leave
+  - wow
