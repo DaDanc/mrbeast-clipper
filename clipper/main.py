@@ -242,6 +242,24 @@ def cmd_publish(issue: int) -> None:
         data["caption"] = CFG["caption_template"].format(hook=custom, hashtags=tags).strip()
         data["yt_title"] = CFG["youtube_title_template"].format(hook=custom, hashtags=tags)[:100]
 
+    # hook naslov na vrhu videa (config "naslovi") – dodaje se jednom, prije prve objave
+    hook = (CFG.get("naslovi") or {}).get(int(issue)) or (CFG.get("naslovi") or {}).get(str(issue))
+    if hook and not data.get("overlay"):
+        from . import hosting, overlay
+        print(f"▶ Dodajem naslov na video: {hook}", flush=True)
+        out = overlay.add_hook(data["video_url"], hook, ROOT / "work", f"hook-{issue}")
+        new_url = hosting.upload(out, f"hook-{issue}-{int(time.time())}")
+        body = info["body"].replace(data["video_url"], new_url)
+        saved = dict(read_json_marker(body, "CLIPDATA") or {})
+        saved.update({"video_url": new_url, "overlay": True})
+        body = re.sub(r"<!--CLIPDATA\s*\{.*?\}\s*-->",
+                      lambda _: f"<!--CLIPDATA {json.dumps(saved, ensure_ascii=False)} -->", body, flags=re.S)
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(body)
+        gh("issue", "edit", str(issue), "--body-file", f.name)
+        data["video_url"] = new_url
+        out.unlink(missing_ok=True)
+
     mode = CFG.get("post_mode", "shareNow")
     try:
         channels = buffer.get_channels(CFG["platforms"])
@@ -445,6 +463,17 @@ def cmd_links() -> None:
         print(f"#{n}: linkovi skupljeni.")
 
 
+# ---------------------------------------------------------------- requeue
+def cmd_requeue(nums: list[int]) -> None:
+    """Vrati klipove u red za objavu (npr. nakon što su stare objave maknute iz Buffera)."""
+    for n in nums:
+        for lab in (L_APPROVE, L_POSTED):
+            subprocess.run(["gh", "issue", "edit", str(n), "--remove-label", lab], capture_output=True)
+        subprocess.run(["gh", "issue", "reopen", str(n)], capture_output=True)
+        comment(n, "↩️ Vraćeno u red za objavu (stara objava maknuta iz Buffera).")
+        print(f"#{n}: vraćen u red")
+
+
 # ---------------------------------------------------------------- views
 def _tiktok_views(url: str) -> int | None:
     """Broj pregleda TikTok videa (yt-dlp, a ako ne uspije – iz HTML-a stranice)."""
@@ -580,6 +609,8 @@ def main() -> None:
     sub.add_parser("reschedule")
     sub.add_parser("daily")
     sub.add_parser("views")
+    rq = sub.add_parser("requeue")
+    rq.add_argument("--issues", default="")
     a = p.parse_args()
     if a.cmd == "make":
         cmd_make(a.url, a.max_videos, a.hashtags, a.clips)
@@ -593,6 +624,8 @@ def main() -> None:
         cmd_reschedule()
     elif a.cmd == "views":
         cmd_views()
+    elif a.cmd == "requeue":
+        cmd_requeue([int(x) for x in re.split(r"[,\s]+", a.issues) if x.strip()])
     else:
         cmd_check()
 

@@ -19,11 +19,18 @@ jobs:
       PYTHONUNBUFFERED: "1"
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+      CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install pyyaml requests
+      - name: Instaliraj ffmpeg i font
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          mkdir -p fonts
+          curl -sSfL -o fonts/Anton-Regular.ttf \
+            https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf || rm -f fonts/Anton-Regular.ttf
+      - run: pip install pyyaml requests cloudinary
       - name: Pošalji u Buffer
         run: python -m clipper.main publish --issue ${{ github.event.issue.number }}

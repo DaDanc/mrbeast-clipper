@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 16 * * *"   # svaki dan u 17:00 po zagrebačkom vremenu (zimsko)
   workflow_dispatch:
+    inputs:
+      vrati:
+        description: "Brojevi klipova koje treba vratiti u red (npr. 31,55). Prazno = ništa"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -15,16 +20,27 @@ concurrency:
 jobs:
   daily:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
-      PYTHONUNBUFFERED: "1"
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+      CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install pyyaml requests
+      - name: Instaliraj ffmpeg i font
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          mkdir -p fonts
+          curl -sSfL -o fonts/Anton-Regular.ttf \
+            https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf || rm -f fonts/Anton-Regular.ttf
+      - run: pip install pyyaml requests cloudinary
+      - name: Vrati klipove u red
+        if: ${{ inputs.vrati != '' }}
+        env:
+          VRATI: ${{ inputs.vrati }}
+        run: python -m clipper.main requeue --issues "$VRATI"
       - name: Dopuni red objava
         run: python -m clipper.main daily

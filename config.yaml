@@ -159,6 +159,28 @@ opisi:
   45: "How one 12-inch record turned Taylor Dayne into a star in 1987"
   57: "Hoda reveals what Seth Meyers is really like at the gym 😂"
 
+# Hook naslov velikim slovima na vrhu videa (iznad slike), cijelo vrijeme klipa.
+# Piše ga Claude nakon provjere; dodaje se na video prije prve objave.
+naslovi:
+  55: "His daughter only allows him a handshake at bedtime"
+  31: "He waited 45 years to walk into Carnegie Hall"
+  51: "People keep telling Seth Meyers he looks like Seth Meyers"
+  36: "She ran for judge while fighting cancer"
+  43: "Taylor Dayne isn't her real name"
+  53: "The SNL audition advice Seth Meyers still gives"
+  30: "He lost his mom at 13"
+  44: "She was singing in NYC clubs at 15"
+  54: "Seth Meyers' favorite part of the day"
+  40: "She sang about love her whole career but never married"
+  33: "His teacher told him to quit at 15"
+  56: "What still brings Seth Meyers joy"
+  41: "Music saved her life"
+  49: "Her son 'needs to get smarter'"
+  34: "He thought his mom was coming back"
+  35: "His mom eloped in Morocco"
+  45: "The record that made Taylor Dayne a star"
+  57: "What Seth Meyers is like at the gym"
+
 # Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
 hype_words:
   - joy
