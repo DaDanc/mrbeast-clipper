@@ -62,7 +62,10 @@ campaign_end: "2026-11-10"
 
 # Automatsko objavljivanje: koliko najbolje ocijenjenih klipova po videu
 # objaviti BEZ tvog odobrenja. 0 = ništa automatski, sve ručno labelom "objavi".
-auto_publish: 3
+auto_publish: 0   # klipove prvo provjerava Claude prema briefu, zatim idu u Buffer
+
+# Klipovi (brojevi Issuea) koji NISU prošli provjeru prema briefu – nikad se ne objavljuju.
+preskoci: []
 
 # Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
 hype_words:
