@@ -82,6 +82,15 @@ preskoci:
   - 27
   - 28
   - 29
+  - 32   # HCJ: počinje usred Hodinog pitanja, završava usred priče
+  - 37   # HCJ: "bio sam uplašen" bez konteksta – rizik zdravlje/izvan konteksta
+  - 38   # HCJ: "nisam znao da pati" o osobi koja se ne vidi tko je – izvan konteksta
+  - 39   # HCJ: odjava i reklama knjige, Whisper krivo napisao naslov
+  - 42   # Taylor: krivo prepoznat govor, priča se raspada
+  - 46   # Taylor: nejasna izjava o nečijoj smrti – rizik netočnosti
+  - 47   # Taylor: zbrkan govor, teško pratiti
+  - 48   # Taylor: obiteljsko nasilje pa nagli skok na drugu temu – osjetljivo
+  - 50   # Seth: samo Hoda objašnjava app, nema gosta
 
 # Klipovi čiji se trenutak smije izrezati ponovo (npr. loš render).
 napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29]
@@ -90,8 +99,28 @@ napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29]
 samo_provjereni: true
 
 # Ručno napisani opisi (umjesto automatskog hooka). Broj Issuea: tekst.
+# REDOSLIJED = redoslijed objavljivanja.
 # Obavezni tekst kampanje i hashtag se dodaju sami.
-opisi: {}
+opisi:
+  52: "Seth Meyers' parents just hit 56 years of marriage and he says they're basically a vaudeville act"
+  55: "Seth Meyers' daughter allows him exactly one thing at bedtime: a firm handshake 😂"
+  31: "Harry Connick Jr. refused to set foot inside Carnegie Hall for 45 years. The reason is his mom"
+  51: "Strangers keep telling Seth Meyers he looks like... Seth Meyers 😂"
+  36: "Harry Connick Jr.'s mom ran for judge while fighting cancer. Seven men ran against her"
+  43: "Taylor Dayne isn't her real name. And her high school yearbook called it"
+  53: "The SNL audition advice Rachel Dratch gave Seth Meyers that he still passes on"
+  30: "Harry Connick Jr. lost his mom at 13. He says his love for her has only grown since"
+  44: "Taylor Dayne was singing in NYC clubs at 15. Her parents had no idea"
+  54: "Seth Meyers' favorite part of the day is the walk to school with his kids"
+  40: "Taylor Dayne sang about love her whole career, never married, and became a mom on her own terms"
+  33: "Harry Connick Jr.'s teacher told him to quit piano at 15. Then told his dad the opposite"
+  56: "Hoda was in tears by the end of this one. Seth Meyers on the hour that brings him the most joy"
+  41: "Taylor Dayne says music saved her life as a lonely kid on Long Island"
+  49: "Taylor Dayne's daughter followed her to Santa Barbara. Her son? 'He needs to get smarter' 😂"
+  34: "Harry Connick Jr. on being a kid who couldn't understand his mom wasn't coming back"
+  35: "Harry Connick Jr.'s mom eloped in Morocco and moved in with her Irish Catholic in-laws in New Orleans"
+  45: "How one 12-inch record turned Taylor Dayne into a star in 1987"
+  57: "Hoda reveals what Seth Meyers is really like at the gym 😂"
 
 # Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
 hype_words:

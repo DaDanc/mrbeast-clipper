@@ -312,6 +312,10 @@ def cmd_daily() -> None:
         if d:
             cands.append((float(d.get("score", 0)), i["number"], i["title"]))
     cands.sort(reverse=True)
+    if CFG.get("samo_provjereni"):
+        # redoslijed objava = redoslijed u config "opisi" (Claude ga slaže nakon provjere)
+        order = [int(x) for x in (CFG.get("opisi") or {})]
+        cands.sort(key=lambda c: order.index(c[1]) if c[1] in order else 10**6)
 
     if not cands:
         tracker = tracker_issue()
