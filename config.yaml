@@ -51,7 +51,7 @@ post_times:
 
 # Dnevno punjenje (workflow "5. Dnevne objave", svaki dan u 17:00):
 # drži u Bufferu ovoliko objava na čekanju, uzimajući najbolje neobjavljene klipove.
-daily_posts: 0   # PAUZA dok Vyro ne odobri prve predaje (bilo je 3)
+daily_posts: 3
 
 # Zadnji dan kampanje (GGGG-MM-DD). Nakon toga dnevne objave staju.
 # Prazno = ne staje samo.
@@ -59,7 +59,7 @@ campaign_end: "2026-11-05"
 
 # Automatsko objavljivanje: koliko najbolje ocijenjenih klipova po videu
 # objaviti BEZ tvog odobrenja. 0 = ništa automatski, sve ručno labelom "objavi".
-auto_publish: 0   # PAUZA (bilo je 3)
+auto_publish: 3
 
 # Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
 hype_words:
