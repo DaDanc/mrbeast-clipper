@@ -89,7 +89,10 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) ->
     work = ROOT / "work"
     work.mkdir(exist_ok=True)
     print("▶ Preuzimam materijal...", flush=True)
-    videos = fetch.fetch(url, work / "src", max_videos=max_videos)
+    # može više linkova odjednom (odvojenih razmakom ili novim redom)
+    videos = []
+    for ui, u in enumerate(url.split()):
+        videos += fetch.fetch(u, work / f"src{ui}", max_videos=max_videos)
 
     made = 0
     for vi, video in enumerate(videos):

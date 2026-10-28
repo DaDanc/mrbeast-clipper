@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       link:
-        description: "Link na materijal kampanje (Google Drive / Dropbox / direktan link)"
+        description: "Link(ovi) na materijal kampanje - više linkova odvoji razmakom"
         required: true
       hashtagovi:
         description: "Hashtagovi iz briefa kampanje (npr. #MW4 #MW4partner). Prazno = iz config.yaml"
