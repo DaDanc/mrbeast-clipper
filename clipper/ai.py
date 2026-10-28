@@ -18,7 +18,6 @@ import time
 
 import requests
 
-from .highlights import Clip
 from .transcribe import Segment
 
 
@@ -151,7 +150,9 @@ def _overlaps(a: float, b: float, ranges: list[tuple[float, float]], gap: float 
 
 
 def validate(raw: dict, segs: list[Segment], n: int, min_s: float, max_s: float, min_score: float,
-             exclude: list[tuple[float, float]]) -> list[Clip]:
+             exclude: list[tuple[float, float]]) -> list:
+    from .highlights import Clip  # ovdje, da provjera postavki ne treba numpy
+
     items = raw.get("clips", []) if isinstance(raw, dict) else raw
     good: list[Clip] = []
     for it in sorted(items, key=lambda x: -float(x.get("score", 0) or 0)):
@@ -187,7 +188,7 @@ def validate(raw: dict, segs: list[Segment], n: int, min_s: float, max_s: float,
 
 
 def pick_clips(segs: list[Segment], n: int, min_s: float, max_s: float, cfg: dict,
-               exclude: list[tuple[float, float]] | None = None) -> list[Clip]:
+               exclude: list[tuple[float, float]] | None = None) -> list:
     exclude = exclude or []
     segs = [s for s in segs if s.text]
     print(f"▶ AI ({provider()}) bira momente iz {len(segs)} rečenica...", flush=True)
