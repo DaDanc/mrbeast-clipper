@@ -69,10 +69,13 @@ def used_ranges() -> dict[str, list[tuple[float, float]]]:
     out: dict[str, list[tuple[float, float]]] = {}
     try:
         issues = json.loads(gh("issue", "list", "--state", "all", "--label", L_CLIP, "--limit", "500",
-                               "--json", "body"))
+                               "--json", "number,body"))
     except Exception:
         return out
+    redo = {int(x) for x in (CFG.get("napravi_ponovo") or [])}
     for i in issues:
+        if i.get("number") in redo:
+            continue
         d = read_json_marker(i.get("body") or "", "CLIPDATA")
         if d and "start" in d and "end" in d:
             out.setdefault(d.get("source", ""), []).append((float(d["start"]), float(d["end"])))

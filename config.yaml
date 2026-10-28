@@ -72,6 +72,13 @@ auto_publish: 0   # klipove prvo provjerava Claude prema briefu, zatim idu u Buf
 preskoci:
   - 20   # Seth: počinje usred priče, nejasno o čemu se radi, pa skače na drugu temu
   - 23   # Seth: počinje usred rečenice, Whisper krivo čuo ("funeral for I") – titlovi bi bili krivi
+  - 26   # HCJ: napravljeno sa starim naslovom na videu (prekinuto pokretanje) – radi se ponovo
+  - 27
+  - 28
+  - 29
+
+# Klipovi čiji se trenutak smije izrezati ponovo (npr. loš render).
+napravi_ponovo: [26, 27, 28, 29]
 
 # Ručno napisani opisi (umjesto automatskog hooka). Broj Issuea: tekst.
 # Obavezni tekst kampanje i hashtag se dodaju sami.
