@@ -296,10 +296,14 @@ def cmd_daily() -> None:
                            "--json", "number,title,body,labels"))
     tags = str(CFG.get("hashtags", "") or "").strip()
     skip = {int(x) for x in (CFG.get("preskoci") or [])}
+    reviewed = {int(x) for x in (CFG.get("opisi") or {})}
     cands = []
     for i in issues:
         names = {l["name"] for l in i["labels"]}
         if L_POSTED in names or i["number"] in skip:
+            continue
+        # samo klipovi koje je Claude provjerio (imaju ručni opis u configu)
+        if CFG.get("samo_provjereni") and i["number"] not in reviewed:
             continue
         d = read_json_marker(i.get("body") or "", "CLIPDATA")
         # samo klipovi trenutne kampanje (opis mora sadržavati njezine hashtagove)

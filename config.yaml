@@ -70,25 +70,28 @@ auto_publish: 0   # klipove prvo provjerava Claude prema briefu, zatim idu u Buf
 
 # Klipovi (brojevi Issuea) koji NISU prošli provjeru prema briefu – nikad se ne objavljuju.
 preskoci:
-  - 20   # Seth: počinje usred priče, nejasno o čemu se radi, pa skače na drugu temu
-  - 23   # Seth: počinje usred rečenice, Whisper krivo čuo ("funeral for I") – titlovi bi bili krivi
-  - 26   # HCJ: napravljeno sa starim naslovom na videu (prekinuto pokretanje) – radi se ponovo
+  - 20   # Seth: počinje usred priče, nejasno o čemu se radi
+  - 23   # Seth: počinje usred rečenice, Whisper krivo čuo – titlovi bi bili krivi
+  - 18   # 18-29: stari render s lošim naslovom na videu – rade se ponovo
+  - 19
+  - 21
+  - 22
+  - 24
+  - 25
+  - 26
   - 27
   - 28
   - 29
 
 # Klipovi čiji se trenutak smije izrezati ponovo (npr. loš render).
-napravi_ponovo: [26, 27, 28, 29]
+napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29]
+
+# Dnevne objave uzimaju SAMO klipove koje je Claude provjerio (imaju opis ispod).
+samo_provjereni: true
 
 # Ručno napisani opisi (umjesto automatskog hooka). Broj Issuea: tekst.
 # Obavezni tekst kampanje i hashtag se dodaju sami.
-opisi:
-  18: "Strangers keep telling Seth Meyers he looks like... Seth Meyers 😂"
-  19: "Seth Meyers' parents just hit 56 years of marriage and he says they're basically a vaudeville act"
-  21: "Seth Meyers' favorite part of the day is the walk to school with his kids"
-  22: "Seth Meyers' daughter allows him exactly one thing at bedtime: a firm handshake 😂"
-  24: "Hoda was in tears by the end of this one. Seth Meyers on the hour that brings him the most joy"
-  25: "Hoda reveals what Seth Meyers is really like at the gym 😂"
+opisi: {}
 
 # Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
 hype_words:
