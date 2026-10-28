@@ -24,7 +24,10 @@ def _largest_videos(folder: Path, limit: int) -> list[Path]:
 
 
 def _download_direct(url: str, out_dir: Path) -> Path:
-    name = re.sub(r"[^\w.-]", "_", url.split("?")[0].rstrip("/").split("/")[-1]) or "source.mp4"
+    from urllib.parse import unquote
+    m = re.search(r'filename%3D%22(.+?)%22', url) or re.search(r'filename="(.+?)"', unquote(url))
+    raw = unquote(m.group(1)).replace("+", " ") if m else url.split("?")[0].rstrip("/").split("/")[-1]
+    name = re.sub(r"[^\w.-]", "_", raw) or "source.mp4"
     if Path(name).suffix.lower() not in VIDEO_EXT:
         name += ".mp4"
     out = out_dir / name
