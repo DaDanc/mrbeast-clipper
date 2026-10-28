@@ -93,7 +93,7 @@ daily_posts: 9
 
 # Obavijest (GitHub, s @mention) kad TikTok objava prijeđe ove brojeve pregleda.
 # Provjerava se svaki sat, za objave iz zadnjih "prati_dana" dana.
-obavijest_pregledi: [1000, 5000]
+obavijest_pregledi: [500, 1000, 5000]
 prati_dana: 7
 
 # Zadnji dan kampanje (GGGG-MM-DD). Nakon toga dnevne objave staju.
