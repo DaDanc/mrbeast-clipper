@@ -116,7 +116,7 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) ->
             name = f"{stamp}-v{vi}-c{ci}"
             out = work / f"{name}.mp4"
             print(f"▶ Renderiram klip {ci + 1}/{len(clips)} ({fmt_time(clip.start)}-{fmt_time(clip.end)})", flush=True)
-            render.render(video, clip, segs, out, work)
+            render.render(video, clip, segs, out, work, show_hook=bool(CFG.get("naslov_na_videu", True)))
             video_url = hosting.upload(out, name)
             thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
 

@@ -50,7 +50,7 @@ def _words_in(segments: list[Segment], start: float, end: float) -> list[Word]:
     return out
 
 
-def build_ass(clip: Clip, segments: list[Segment], path: Path, group: int = 3) -> Path:
+def build_ass(clip: Clip, segments: list[Segment], path: Path, group: int = 3, show_hook: bool = True) -> Path:
     font = _font()
     cap_size = 92 if font == "Anton" else 78
     hook_size = 70 if font == "Anton" else 58
@@ -69,11 +69,12 @@ Style: Hook,{font},{hook_size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = []
-    # hook gore u prve 4 s (bijeli tekst na crnoj traci)
-    lines.append(
-        f"Dialogue: 1,{_ts(0)},{_ts(min(4.0, clip.duration))},Hook,,0,0,0,,"
-        f"{{\\fad(150,250)}}{_esc(clip.hook.upper())}"
-    )
+    # hook gore u prve 4 s (bijeli tekst na crnoj traci) – može se isključiti u configu
+    if show_hook:
+        lines.append(
+            f"Dialogue: 1,{_ts(0)},{_ts(min(4.0, clip.duration))},Hook,,0,0,0,,"
+            f"{{\\fad(150,250)}}{_esc(clip.hook.upper())}"
+        )
 
     words = []
     for w in _words_in(segments, clip.start, clip.end):
@@ -124,8 +125,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return path
 
 
-def render(video: Path, clip: Clip, segments: list[Segment], out: Path, workdir: Path) -> Path:
-    ass = build_ass(clip, segments, workdir / (out.stem + ".ass"))
+def render(video: Path, clip: Clip, segments: list[Segment], out: Path, workdir: Path,
+           show_hook: bool = True) -> Path:
+    ass = build_ass(clip, segments, workdir / (out.stem + ".ass"), show_hook=show_hook)
     ass_arg = str(ass).replace("\\", "/").replace(":", "\\:")
     fonts_arg = str(FONTS_DIR).replace(":", "\\:")
     vf = (

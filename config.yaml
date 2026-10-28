@@ -26,6 +26,10 @@ caption_template: |
 
   Joy 101 with Hoda Kotb, an iHeart podcast. New episodes every Wednesday on YouTube. {hashtags}
 
+# Naslov (hook) velikim slovima na vrhu videa u prve 4 s.
+# Isključeno jer automatski hook često bude komad rečenice, a ne može se kasnije promijeniti.
+naslov_na_videu: false
+
 # Naslov za YouTube Shorts (max 100 znakova).
 youtube_title_template: "{hook}"
 
