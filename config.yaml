@@ -69,7 +69,7 @@ youtube_title_template: "{hook}"
 platforms:
   - tiktok
   - instagram
-  - youtube
+  # - youtube   # Joy 101: iHeartMedia Content ID blokira klipove na YouTubeu (28.10.)
 
 # Kad objaviti:
 #   schedule   = u sljedeći slobodan termin iz post_times ispod (preporučeno)
