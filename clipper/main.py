@@ -491,10 +491,10 @@ def cmd_views() -> None:
             continue
         views = _tiktok_views(url)
         if views is None:
-            print(f"#{n}: ne mogu dohvatiti preglede ({url})")
+            print(f"::warning::#{n}: ne mogu dohvatiti preglede ({url})")
             continue
         new = [l for l in limits if views >= l and l not in done]
-        print(f"#{n}: {views} pregleda" + (f" → obavijest za {new}" if new else ""))
+        print(f"::notice::#{n}: {views} pregleda" + (f" → obavijest za {new}" if new else ""))
         if not new:
             continue
         top = max(new)
