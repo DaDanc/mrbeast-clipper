@@ -80,6 +80,10 @@ post_mode: schedule
 # Termini objava (po tvom vremenu). Publika je uglavnom iz SAD-a:
 # 18:00 = 12h u New Yorku, 20:30 = 14:30h, 23:00 = 17h.
 timezone: Europe/Zagreb
+# Objava svakih 60–100 min (svaki put drugo vrijeme), samo u prozoru 14:00–04:00
+# (= 8:00–22:00 u New Yorku). Ako ovo obrišeš, vrijede fiksni post_times ispod.
+razmak_minuta: [60, 100]
+prozor_objava: ["14:00", "04:00"]
 post_times:
   - "18:00"
   - "20:30"

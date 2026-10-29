@@ -2,10 +2,7 @@ name: 3. Skupi linkove za Vyro
 
 on:
   schedule:
-    - cron: "17 * * * *"   # svaki sat
-    - cron: "10 17 * * *"  # 18:10 po našem vremenu, odmah nakon objave u 18:00
-    - cron: "40 19 * * *"  # 20:40
-    - cron: "10 22 * * *"  # 23:10
+    - cron: "*/15 * * * *" # svakih 15 min (objave su u nasumična vremena)
   workflow_dispatch:
 
 permissions:

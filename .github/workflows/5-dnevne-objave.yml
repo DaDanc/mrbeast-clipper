@@ -2,7 +2,8 @@ name: 5. Dnevne objave
 
 on:
   schedule:
-    - cron: "0 16 * * *"   # svaki dan u 17:00 po zagrebačkom vremenu (zimsko)
+    - cron: "0 16 * * *"   # 17:00 po zagrebačkom (zimsko) – tu idu i upozorenja
+    - cron: "30 */2 * * *" # svaka 2 sata dopuni red (objave idu svakih 60–100 min)
   workflow_dispatch:
     inputs:
       vrati:

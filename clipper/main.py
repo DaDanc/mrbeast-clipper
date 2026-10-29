@@ -188,14 +188,42 @@ def _parse_iso(s: str):
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-def next_slot(taken: list) -> "datetime":
-    """Prvi slobodan termin iz config post_times (najmanje 15 min od sada,
-    najmanje 30 min razmaka od već zakazanih objava na tom kanalu)."""
+def next_slot(taken: list, rng=None) -> "datetime":
+    """Sljedeći termin objave.
+
+    Ako je u configu "razmak_minuta" (npr. [60, 100]): objava svakih 60–100 min (svaki put drugačije),
+    samo unutar "prozor_objava" (npr. ["14:00", "04:00"]).
+    Inače: prvi slobodan termin iz post_times (najmanje 30 min od drugih objava)."""
+    import random
     from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
 
     tz = ZoneInfo(CFG.get("timezone", "Europe/Zagreb"))
     now = datetime.now(tz) + timedelta(minutes=15)
+    rng = rng or random.Random()
+
+    gap = CFG.get("razmak_minuta")
+    if gap:
+        lo, hi = int(gap[0]), int(gap[1])
+        last = max(taken).astimezone(tz) if taken else None
+        slot = max(now + timedelta(minutes=rng.randint(0, 12)),
+                   (last + timedelta(minutes=rng.randint(lo, hi))) if last else now)
+        win = CFG.get("prozor_objava")
+        if win:
+            sh, sm = (int(x) for x in win[0].split(":"))
+            eh, em = (int(x) for x in win[1].split(":"))
+            start_m, end_m = sh * 60 + sm, eh * 60 + em
+            for _ in range(3):
+                m = slot.hour * 60 + slot.minute
+                inside = (start_m <= m < end_m) if start_m < end_m else (m >= start_m or m < end_m)
+                if inside:
+                    break
+                # pomakni na početak sljedećeg prozora (+ malo slučajnih minuta)
+                day = slot.date() if m < start_m else (slot + timedelta(days=1)).date()
+                slot = datetime(day.year, day.month, day.day, sh, sm, tzinfo=tz) + \
+                    timedelta(minutes=rng.randint(3, 25))
+        return slot.replace(second=0, microsecond=0)
+
     times = sorted(CFG.get("post_times") or ["18:00", "20:30", "23:00"])
     for day in range(0, 60):
         d = (now + timedelta(days=day)).date()
@@ -270,14 +298,16 @@ def cmd_publish(issue: int) -> None:
         comment(issue, f"❌ U Bufferu nema povezanih kanala za: {', '.join(CFG['platforms'])}.")
         sys.exit(1)
 
+    slot = None
+    if mode == "schedule":
+        taken = [_parse_iso(p["dueAt"]) for ch in channels for p in buffer.scheduled_posts(ch["id"])]
+        slot = next_slot(taken)
     done, lines = {}, []
     for ch in channels:
         try:
             due = None
             when = "poslano u Buffer"
-            if mode == "schedule":
-                taken = [_parse_iso(p["dueAt"]) for p in buffer.scheduled_posts(ch["id"])]
-                slot = next_slot(taken)
+            if slot is not None:
                 due = _utc_iso(slot)
                 when = f"zakazano za {_local(slot)}"
             post = buffer.create_video_post(ch, data["caption"], data["video_url"], data["yt_title"],
@@ -347,7 +377,13 @@ def cmd_daily() -> None:
     order = [int(x) for x in (CFG.get("opisi") or {})]
     cands.sort(key=lambda c: order.index(c[1]) if c[1] in order else 10**6)
 
+    from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo as _Z
+    warn_now = _dt.now(_Z(CFG.get("timezone", "Europe/Zagreb"))).hour == 17
     if not cands:
+        if not warn_now:
+            print("Nema provjerenih neobjavljenih klipova.")
+            return
         tracker = tracker_issue()
         comment(tracker, f"{owner_mention()}⚠️ **Ponestalo je klipova.** Sutra nema objava dok ne pokreneš "
                          "**1. Napravi klipove** s materijalom nove (ili iste) kampanje.")
@@ -365,7 +401,7 @@ def cmd_daily() -> None:
             print(f"::error::#{num} nije objavljen: {e!r} | " + " / ".join(x.strip() for x in tb))
 
     left = len(cands) - min(need, len(cands))
-    if left < want:
+    if left < want and warn_now:
         tracker = tracker_issue()
         comment(tracker, f"{owner_mention()}ℹ️ Ostalo je još samo **{left}** neobjavljenih klipova. "
                          "Uskoro pokreni **1. Napravi klipove** da objave ne stanu.")
@@ -379,9 +415,11 @@ def cmd_reschedule() -> None:
     for ch in buffer.get_channels(CFG["platforms"]):
         posts = buffer.scheduled_posts(ch["id"])
         print(f"▶ {ch['service']} ({ch['name']}): {len(posts)} objava čeka")
+        import random
+        rng = random.Random(2026)  # isti niz za svaki kanal → ista vremena na TikToku i Instagramu
         taken: list = []
-        for p in posts:
-            slot = next_slot(taken)
+        for p in sorted(posts, key=lambda x: x["dueAt"]):
+            slot = next_slot(taken, rng)
             taken.append(slot)
             old = _local(_parse_iso(p["dueAt"]))
             try:
