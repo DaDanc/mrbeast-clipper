@@ -35,6 +35,10 @@ kampanje:
       Stream Phony on Hulu and Hulu on Disney+ for bundle subscribers. {hashtags}
     min_seconds: 20
     max_seconds: 55
+    # Master ima 8 mono tragova: 0-5 = 5.1 (2 = centar, tu je dijalog), 6-7 = stereo miks.
+    # Govor se prepoznaje samo s centra (nema pjesama), a klip dobiva stereo miks.
+    audio_govor: 2
+    audio_mix: [6, 7]
     # isti video ne smije na više računa → Phony ide samo na TikTok (od tamo se predaje na Vyro)
     platforms: [tiktok]
     brief: |
@@ -175,9 +179,10 @@ preskoci:
   - 47   # Taylor: zbrkan govor, teško pratiti
   - 48   # Taylor: obiteljsko nasilje pa nagli skok na drugu temu – osjetljivo
   - 50   # Seth: samo Hoda objašnjava app, nema gosta
+  - 58   # Phony: pjesma (krivi audio trag) – radi se ponovo
 
 # Klipovi čiji se trenutak smije izrezati ponovo (npr. loš render).
-napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29]
+napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29, 58]
 
 # Dnevne objave uzimaju SAMO provjerene klipove: one s opisom ispod
 # ili one koje je odabrao i ocijenio AI (🤖 u naslovu Issuea).

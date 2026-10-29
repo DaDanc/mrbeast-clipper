@@ -22,9 +22,11 @@ class Segment:
     words: list[Word]
 
 
-def extract_audio(video: Path, wav: Path) -> Path:
+def extract_audio(video: Path, wav: Path, stream: int | None = None) -> Path:
+    """stream = koji audio trag koristiti (npr. 2 = centar/dijalog u 5.1 masteru TV serije)."""
+    sel = ["-map", f"0:a:{int(stream)}"] if stream is not None else []
     subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(video),
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), *sel,
          "-vn", "-ac", "1", "-ar", "16000", str(wav)],
         check=True,
     )

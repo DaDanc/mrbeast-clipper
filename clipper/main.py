@@ -165,7 +165,7 @@ def _make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> No
     made = 0
     for vi, video in enumerate(videos):
         print(f"▶ Video {vi + 1}: {video.name}", flush=True)
-        wav = transcribe.extract_audio(video, work / f"audio{vi}.wav")
+        wav = transcribe.extract_audio(video, work / f"audio{vi}.wav", CFG.get("audio_govor"))
         print("▶ Prepoznajem govor (ovo traje najduže)...", flush=True)
         segs = transcribe.transcribe(wav, CFG.get("whisper_model", "small"))
         if not segs:
@@ -196,7 +196,7 @@ def _make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> No
             print(f"▶ Renderiram klip {ci + 1}/{len(clips)} ({fmt_time(clip.start)}-{fmt_time(clip.end)})", flush=True)
             nv = CFG.get("naslov_na_videu", "auto")
             show_hook = clip.ai if str(nv).lower() == "auto" else bool(nv)
-            render.render(video, clip, segs, out, work, show_hook=show_hook)
+            render.render(video, clip, segs, out, work, show_hook=show_hook, audio_mix=CFG.get("audio_mix"))
             video_url = hosting.upload(out, name)
             thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
 

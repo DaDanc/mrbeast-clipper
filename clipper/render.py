@@ -126,7 +126,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 
 def render(video: Path, clip: Clip, segments: list[Segment], out: Path, workdir: Path,
-           show_hook: bool = True) -> Path:
+           show_hook: bool = True, audio_mix: list[int] | None = None) -> Path:
+    """audio_mix = audio tragovi koji čine stereo miks (npr. [6, 7] u masteru TV serije)."""
     ass = build_ass(clip, segments, workdir / (out.stem + ".ass"), show_hook=show_hook)
     ass_arg = str(ass).replace("\\", "/").replace(":", "\\:")
     fonts_arg = str(FONTS_DIR).replace(":", "\\:")
@@ -138,10 +139,17 @@ def render(video: Path, clip: Clip, segments: list[Segment], out: Path, workdir:
         f"[bgb][fgc]overlay=0:{FG_Y},fps=30,"
         f"ass='{ass_arg}':fontsdir='{fonts_arg}',format=yuv420p[v]"
     )
+    if audio_mix and len(audio_mix) > 1:
+        ins = "".join(f"[0:a:{int(i)}]" for i in audio_mix)
+        aud, amap = f";{ins}amerge=inputs={len(audio_mix)}[aout]", "[aout]"
+    elif audio_mix:
+        aud, amap = "", f"0:a:{int(audio_mix[0])}"
+    else:
+        aud, amap = "", "0:a:0?"
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-ss", f"{clip.start:.2f}", "-t", f"{clip.duration:.2f}", "-i", str(video),
-        "-filter_complex", vf, "-map", "[v]", "-map", "0:a:0?",
+        "-filter_complex", vf + aud, "-map", "[v]", "-map", amap,
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-profile:v", "high",
         "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
         "-movflags", "+faststart", str(out),
