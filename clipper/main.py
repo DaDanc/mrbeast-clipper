@@ -636,8 +636,15 @@ def cmd_probe(kampanja: str) -> None:
         out = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
                               "stream=index,codec_type,codec_name,channels,channel_layout:stream_tags=title,handler_name",
                               "-of", "compact", v["url"]], capture_output=True, text=True, timeout=300)
-        for line in (out.stdout or out.stderr).splitlines()[:20]:
-            print(f"::notice::{v['name']}: {line}")
+        n_audio = sum(1 for l in out.stdout.splitlines() if "codec_type=audio" in l)
+        print(f"::notice::{v['name']}: {n_audio} audio tragova")
+        for k in range(n_audio):
+            r = subprocess.run(["ffmpeg", "-hide_banner", "-ss", "600", "-t", "90", "-i", v["url"],
+                                "-map", f"0:a:{k}", "-af", "volumedetect", "-f", "null", "-"],
+                               capture_output=True, text=True, timeout=600)
+            mean = re.search(r"mean_volume: (\S+) dB", r.stderr)
+            mx = re.search(r"max_volume: (\S+) dB", r.stderr)
+            print(f"::notice::trag {k}: prosjek {mean.group(1) if mean else '?'} dB, max {mx.group(1) if mx else '?'} dB")
 
 
 # ---------------------------------------------------------------- requeue
