@@ -314,14 +314,27 @@ def _local(dt) -> str:
 
 
 # ---------------------------------------------------------------- publish
-def cmd_publish(issue: int) -> None:
+def cmd_publish(issue: int, at: str = "") -> None:
     info = json.loads(gh("issue", "view", str(issue), "--json", "body"))
     d = read_json_marker(info.get("body") or "", "CLIPDATA") or {}
     with use_campaign(d.get("kampanja")):
-        _publish(issue)
+        _publish(issue, at)
 
 
-def _publish(issue: int) -> None:
+def _parse_at(at: str):
+    """'21:30' (danas/sutra po našem vremenu) → datetime."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(CFG.get("timezone", "Europe/Zagreb"))
+    hh, mm = (int(x) for x in at.strip().split(":"))
+    now = datetime.now(tz)
+    slot = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    if slot < now + timedelta(minutes=5):
+        slot += timedelta(days=1)
+    return slot
+
+
+def _publish(issue: int, at: str = "") -> None:
     from . import buffer
 
     info = json.loads(gh("issue", "view", str(issue), "--json", "body,labels"))
@@ -376,7 +389,9 @@ def _publish(issue: int) -> None:
         sys.exit(1)
 
     slot = None
-    if mode == "schedule":
+    if at:
+        slot = _parse_at(at)
+    elif mode == "schedule":
         taken = [_parse_iso(p["dueAt"]) for ch in channels for p in buffer.scheduled_posts(ch["id"])]
         slot = next_slot(taken)
     done, lines = {}, []
@@ -752,6 +767,7 @@ def main() -> None:
     m.add_argument("--kampanja", default="")
     pb = sub.add_parser("publish")
     pb.add_argument("--issue", type=int, required=True)
+    pb.add_argument("--at", default="")
     sub.add_parser("links")
     sub.add_parser("check")
     sub.add_parser("reschedule")
@@ -767,7 +783,7 @@ def main() -> None:
     elif a.cmd == "daily":
         cmd_daily()
     elif a.cmd == "publish":
-        cmd_publish(a.issue)
+        cmd_publish(a.issue, a.at)
     elif a.cmd == "links":
         cmd_links()
     elif a.cmd == "reschedule":

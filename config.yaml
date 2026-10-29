@@ -35,8 +35,8 @@ kampanje:
       Stream Phony on Hulu and Hulu on Disney+ for bundle subscribers. {hashtags}
     min_seconds: 20
     max_seconds: 55
-    platforms: [tiktok, instagram]
-    jedna_platforma: true
+    # isti video ne smije na više računa → Phony ide samo na TikTok (od tamo se predaje na Vyro)
+    platforms: [tiktok]
     brief: |
       Campaign: PHONY, a Hulu coming-of-age mystery series starring Connie Britton and Sam Nivola.
       A teenager wakes up in the hospital after a car accident and discovers his mom appears to
