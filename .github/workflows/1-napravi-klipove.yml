@@ -14,6 +14,10 @@ on:
         description: "Koliko klipova napraviti (prazno = iz config.yaml)"
         required: false
         default: ""
+      kampanja:
+        description: "Kampanja iz config.yaml (npr. joy101, phony). Prazno = zadana"
+        required: false
+        default: ""
       broj_videa:
         description: "Koliko videa iz mape obraditi (ako je link mapa)"
         required: false
@@ -69,4 +73,5 @@ jobs:
           BROJ: ${{ inputs.broj_videa }}
           TAGS: ${{ inputs.hashtagovi }}
           KLIPOVI: ${{ inputs.broj_klipova }}
-        run: python -m clipper.main make --url "$LINK" --max-videos "$BROJ" --hashtags "$TAGS" --clips "${KLIPOVI:-0}"
+          KAMPANJA: ${{ inputs.kampanja }}
+        run: python -m clipper.main make --url "$LINK" --max-videos "$BROJ" --hashtags "$TAGS" --clips "${KLIPOVI:-0}" --kampanja "$KAMPANJA"

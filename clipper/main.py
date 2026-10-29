@@ -29,6 +29,50 @@ L_LINKS = "linkovi"
 TRACKER_TITLE = "📋 Linkovi za Vyro"
 
 
+# ---------------------------------------------------------------- kampanje
+# Svaka kampanja u config "kampanje" može pregaziti bilo koju postavku (hashtags,
+# caption_template, brief, min_seconds, platforms...). Klip pamti svoju kampanju u CLIPDATA.
+BASE_CFG = CFG
+
+
+def default_campaign() -> str:
+    return str(BASE_CFG.get("zadana_kampanja") or next(iter(BASE_CFG.get("kampanje") or {"": 0})))
+
+
+def campaign_cfg(key: str | None) -> dict:
+    c = dict(BASE_CFG)
+    key = key or default_campaign()
+    c.update((BASE_CFG.get("kampanje") or {}).get(key) or {})
+    c["_kampanja"] = key
+    return c
+
+
+class use_campaign:
+    """with use_campaign("phony"): ... → unutar bloka CFG su postavke te kampanje."""
+
+    def __init__(self, key: str | None):
+        self.key = key
+
+    def __enter__(self):
+        global CFG
+        CFG = campaign_cfg(self.key)
+        return CFG
+
+    def __exit__(self, *exc):
+        global CFG
+        CFG = BASE_CFG
+        return False
+
+
+def campaign_active(key: str | None) -> bool:
+    from datetime import date
+    c = campaign_cfg(key)
+    if key and key not in (BASE_CFG.get("kampanje") or {}):
+        return False
+    end = str(c.get("kraj") or "").strip()
+    return not (end and date.today().isoformat() > end)
+
+
 # ---------------------------------------------------------------- GitHub helperi
 def gh(*args: str, capture: bool = True) -> str:
     res = subprocess.run(["gh", *args], capture_output=capture, text=True)
@@ -82,24 +126,45 @@ def used_ranges() -> dict[str, list[tuple[float, float]]]:
     return out
 
 
-def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> None:
-    from . import ai, fetch, highlights, hosting, render, transcribe
+def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0,
+             kampanja: str | None = None) -> None:
+    with use_campaign(kampanja):
+        _make(url, max_videos, hashtags, n_clips)
+
+
+def _iter_videos(url: str, work: Path, max_videos: int):
+    """Skida linkove jedan po jedan i briše izvor nakon obrade (epizode znaju imati 9 GB)."""
+    import shutil
+    from . import fetch
+
+    for ui, u in enumerate(url.split()):
+        src = work / f"src{ui}"
+        print(f"▶ Preuzimam materijal {ui + 1}/{len(url.split())}...", flush=True)
+        try:
+            vids = fetch.fetch(u, src, max_videos=max_videos)
+        except Exception as e:  # noqa: BLE001
+            print(f"::error::Preuzimanje nije uspjelo: {e}")
+            shutil.rmtree(src, ignore_errors=True)
+            continue
+        for v in vids:
+            yield v
+        shutil.rmtree(src, ignore_errors=True)
+
+
+def _make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> None:
+    from . import ai, highlights, hosting, render, transcribe
 
     n_clips = n_clips or int(CFG["clips_per_video"])
     tags = (hashtags or CFG.get("hashtags", "")).strip()
-    print(f"▶ Hashtagovi za objave: {tags or '(nema)'}", flush=True)
+    print(f"▶ Kampanja: {CFG.get('_kampanja')} · hashtagovi: {tags or '(nema)'}", flush=True)
     ensure_labels()
     work = ROOT / "work"
     work.mkdir(exist_ok=True)
-    print("▶ Preuzimam materijal...", flush=True)
-    # može više linkova odjednom (odvojenih razmakom ili novim redom)
-    videos = []
-    for ui, u in enumerate(url.split()):
-        videos += fetch.fetch(u, work / f"src{ui}", max_videos=max_videos)
+    videos = _iter_videos(url, work, max_videos)
 
     made = 0
     for vi, video in enumerate(videos):
-        print(f"▶ Video {vi + 1}/{len(videos)}: {video.name}", flush=True)
+        print(f"▶ Video {vi + 1}: {video.name}", flush=True)
         wav = transcribe.extract_audio(video, work / f"audio{vi}.wav")
         print("▶ Prepoznajem govor (ovo traje najduže)...", flush=True)
         segs = transcribe.transcribe(wav, CFG.get("whisper_model", "small"))
@@ -122,6 +187,7 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) ->
             clips = highlights.find_clips(
                 segs, loud, CFG["hype_words"], n_clips, CFG["min_seconds"], CFG["max_seconds"], exclude=used
             )
+        wav.unlink(missing_ok=True)
         stamp = time.strftime("%Y%m%d-%H%M")
         created: list[tuple[float, int]] = []
         for ci, clip in enumerate(clips):
@@ -139,7 +205,7 @@ def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) ->
             yt_title = CFG["youtube_title_template"].format(hook=clip.hook if clip.ai else desc, hashtags=tags)[:100]
             data = {"video_url": video_url, "caption": caption, "yt_title": yt_title,
                     "source": video.name, "start": round(clip.start, 2), "end": round(clip.end, 2),
-                    "score": round(clip.score, 2), "ai": clip.ai}
+                    "score": round(clip.score, 2), "ai": clip.ai, "kampanja": CFG.get("_kampanja")}
             grade = f"🤖 AI ocjena {clip.score:.0f}/10" if clip.ai else f"ocjena {clip.score:.1f}"
             body = f"""[![pregled]({thumb})]({video_url})
 
@@ -249,6 +315,13 @@ def _local(dt) -> str:
 
 # ---------------------------------------------------------------- publish
 def cmd_publish(issue: int) -> None:
+    info = json.loads(gh("issue", "view", str(issue), "--json", "body"))
+    d = read_json_marker(info.get("body") or "", "CLIPDATA") or {}
+    with use_campaign(d.get("kampanja")):
+        _publish(issue)
+
+
+def _publish(issue: int) -> None:
     from . import buffer
 
     info = json.loads(gh("issue", "view", str(issue), "--json", "body,labels"))
@@ -294,6 +367,10 @@ def cmd_publish(issue: int) -> None:
     except Exception as e:
         comment(issue, f"❌ Ne mogu se spojiti na Buffer: {e}")
         raise
+    if channels and CFG.get("jedna_platforma"):
+        # kampanja ne dopušta isti video na više računa → svaki klip ide na jednu mrežu (naizmjence)
+        channels = sorted(channels, key=lambda c: c["service"])
+        channels = [channels[int(issue) % len(channels)]]
     if not channels:
         comment(issue, f"❌ U Bufferu nema povezanih kanala za: {', '.join(CFG['platforms'])}.")
         sys.exit(1)
@@ -337,11 +414,6 @@ def cmd_daily() -> None:
     from datetime import date
     from . import buffer
 
-    end = str(CFG.get("campaign_end") or "").strip()
-    if end and date.today().isoformat() > end:
-        print(f"Kampanja je završila ({end}), ne objavljujem ništa.")
-        return
-
     want = int(CFG.get("daily_posts", 3) or 0)
     channels = buffer.get_channels(CFG["platforms"])
     if not channels or want <= 0:
@@ -367,8 +439,9 @@ def cmd_daily() -> None:
         # samo provjereni klipovi: ručni opis u configu ILI ih je odabrao i ocijenio AI
         if CFG.get("samo_provjereni") and i["number"] not in reviewed and not (d and d.get("ai")):
             continue
-        # samo klipovi trenutne kampanje (opis mora sadržavati njezine hashtagove)
-        if d and tags and tags not in d.get("caption", ""):
+        # samo klipovi kampanja koje još traju (stari klipovi bez oznake = zadana kampanja)
+        if d and not campaign_active(d.get("kampanja") or (
+                default_campaign() if (not tags or tags in d.get("caption", "")) else "__stara__")):
             continue
         if d:
             cands.append((float(d.get("score", 0)), i["number"], i["title"]))
@@ -505,29 +578,37 @@ def cmd_links() -> None:
 
 # ---------------------------------------------------------------- auto (nove epizode)
 def cmd_auto(dry: bool = False) -> None:
-    """Pogledaj Frame.io mapu kampanje i napravi klipove iz epizoda koje još nismo obradili."""
+    """Za svaku aktivnu kampanju pogledaj njezinu Frame.io mapu i napravi klipove iz novih epizoda."""
     from . import frameio
 
-    share = str(CFG.get("frameio_mapa") or "").strip()
-    if not share:
-        print("Nema frameio_mapa u configu.")
-        return
-    vids = frameio.list_videos(share, int(CFG.get("min_minuta_epizode", 10)),
-                               str(CFG.get("preskoci_datoteke") or ""))
     done = set(used_ranges().keys())
     norm = lambda n: re.sub(r"[^\w.-]", "_", n)  # noqa: E731
-    new = [v for v in vids if norm(v["name"]) not in done]
-    for v in vids:
-        state = "NOVA" if v in new else "već obrađena"
-        print(f"::notice::{v['name']} ({v['seconds'] // 60} min): {state}")
-    if not new or dry:
-        return
-    tracker = tracker_issue()
-    names = ", ".join(v["name"] for v in new)
-    comment(tracker, f"{owner_mention()}🆕 **Nove epizode u Frame.io mapi:** {names}\n\n"
-                     "Radim klipove. Kad budu gotovi, Claude ih provjeri i napiše opise prije objave.")
-    cmd_make(" ".join(v["url"] for v in new), 1, "", int(CFG.get("auto_klipova", 10)))
-
+    for key in (BASE_CFG.get("kampanje") or {}):
+        if not campaign_active(key):
+            print(f"::notice::{key}: kampanja je završila, preskačem.")
+            continue
+        with use_campaign(key):
+            share = str(CFG.get("frameio_mapa") or "").strip()
+            if not share:
+                continue
+            try:
+                vids = frameio.list_videos(share, int(CFG.get("min_minuta_epizode", 10)),
+                                           str(CFG.get("preskoci_datoteke") or ""))
+            except Exception as e:  # noqa: BLE001
+                print(f"::error::{key}: ne mogu pročitati Frame.io mapu ({e})")
+                continue
+            new = [v for v in vids if norm(v["name"]) not in done]
+            for v in vids:
+                state = "NOVA" if v in new else "već obrađena"
+                print(f"::notice::{key}: {v['name']} ({v['seconds'] // 60} min): {state}")
+            if not new or dry:
+                continue
+            tracker = tracker_issue()
+            names = ", ".join(v["name"] for v in new)
+            comment(tracker, f"{owner_mention()}🆕 **{CFG.get('naziv', key)} – nove epizode:** {names}\n\n"
+                             "Radim klipove. Kad budu gotovi, Claude ih provjeri prije objave.")
+        cmd_make(" ".join(v["url"] for v in new), 1, "", int(campaign_cfg(key).get("auto_klipova", 10)),
+                 kampanja=key)
 
 # ---------------------------------------------------------------- requeue
 def cmd_requeue(nums: list[int]) -> None:
@@ -668,6 +749,7 @@ def main() -> None:
     m.add_argument("--max-videos", type=int, default=1)
     m.add_argument("--hashtags", default="")
     m.add_argument("--clips", type=int, default=0)
+    m.add_argument("--kampanja", default="")
     pb = sub.add_parser("publish")
     pb.add_argument("--issue", type=int, required=True)
     sub.add_parser("links")
@@ -681,7 +763,7 @@ def main() -> None:
     rq.add_argument("--issues", default="")
     a = p.parse_args()
     if a.cmd == "make":
-        cmd_make(a.url, a.max_videos, a.hashtags, a.clips)
+        cmd_make(a.url, a.max_videos, a.hashtags, a.clips, a.kampanja or None)
     elif a.cmd == "daily":
         cmd_daily()
     elif a.cmd == "publish":

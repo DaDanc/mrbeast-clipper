@@ -28,7 +28,13 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
+      - name: Oslobodi prostor na disku (epizode znaju imati 9 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h / | tail -1
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:

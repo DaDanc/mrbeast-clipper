@@ -2,13 +2,52 @@
 #  POSTAVKE KLIPERA - ovo smiješ mijenjati
 # ==============================================================
 
-# Javna Frame.io mapa kampanje. Svaki dan se provjeri ima li novih epizoda
-# (dužih od min_minuta_epizode) i iz njih se sami naprave klipovi.
-frameio_mapa: "https://f.io/RWHt_IEp"
+# ==============================================================
+#  KAMPANJE
+# ==============================================================
+# Svaka kampanja može pregaziti bilo koju postavku ispod (hashtags, caption_template,
+# brief, min_seconds, max_seconds, platforms, hype_words...). Što ne navede, uzima odozdo.
+#   frameio_mapa      = javna Frame.io mapa; 2x dnevno se provjeri ima li novih epizoda
+#   preskoci_datoteke = datoteke iz mape koje se ne koriste (gotovi klipovi koje svi objavljuju)
+#   kraj              = zadnji dan kampanje (nakon toga se njezini klipovi ne objavljuju)
+#   jedna_platforma   = isti video ne smije na više računa → svaki klip ide na jednu mrežu
+zadana_kampanja: joy101
 min_minuta_epizode: 10
-# gotovi Shortsi iz mape se ne koriste (svi ih objavljuju)
-preskoci_datoteke: "(?i)^shorts"
 auto_klipova: 10
+
+kampanje:
+  joy101:
+    naziv: "Joy 101"
+    kraj: "2026-11-10"
+    frameio_mapa: "https://f.io/RWHt_IEp"
+    preskoci_datoteke: "(?i)^shorts"
+    # ostalo (hashtags, opis, brief, 32-58 s) = postavke ispod
+
+  phony:
+    naziv: "Phony (Hulu)"
+    kraj: "2026-11-10"
+    frameio_mapa: "https://f.io/f7W69-yn"
+    preskoci_datoteke: "(?i)premade"
+    hashtags: "#Phony #HuluPartner"
+    caption_template: |
+      {hook}
+
+      Stream Phony on Hulu and Hulu on Disney+ for bundle subscribers. {hashtags}
+    min_seconds: 20
+    max_seconds: 55
+    platforms: [tiktok, instagram]
+    jedna_platforma: true
+    brief: |
+      Campaign: PHONY, a Hulu coming-of-age mystery series starring Connie Britton and Sam Nivola.
+      A teenager wakes up in the hospital after a car accident and discovers his mom appears to
+      have been replaced by an impostor.
+      - Pick attention-grabbing moments: the central mystery, conspiracy theories, the close-knit
+        friend group, Connie Britton's star power.
+      - The clip must make sense on its own and must not misrepresent the scene or invent a plot.
+      - AVOID scenes where music is playing (licensed songs are forbidden) – prefer pure dialogue.
+      - Nothing negative about Disney, Hulu or the show. At least 15 seconds.
+    hype_words: [mom, impostor, imposter, fake, real, "who are you", accident, hospital, lying,
+                 liar, secret, conspiracy, "what happened", "not my mom", police, truth, weird, crazy]
 
 # Koliko klipova napraviti iz jednog videa
 clips_per_video: 8
@@ -108,9 +147,6 @@ daily_posts: 9
 obavijest_pregledi: [500, 1000, 5000]
 prati_dana: 7
 
-# Zadnji dan kampanje (GGGG-MM-DD). Nakon toga dnevne objave staju.
-# Prazno = ne staje samo.
-campaign_end: "2026-11-10"
 
 # Automatsko objavljivanje: koliko najbolje ocijenjenih klipova po videu
 # objaviti BEZ tvog odobrenja. 0 = ništa automatski, sve ručno labelom "objavi".
