@@ -180,6 +180,9 @@ preskoci:
   - 48   # Taylor: obiteljsko nasilje pa nagli skok na drugu temu – osjetljivo
   - 50   # Seth: samo Hoda objašnjava app, nema gosta
   - 58   # Phony: pjesma (krivi audio trag) – radi se ponovo
+  - 60   # Phony: grub razgovor o seksu – rizik za Disney brand safety
+  - 64   # Phony: isti dijelovi kao #62 i #72 (recap) – ponavljanje
+  - 65   # Phony: slab i nejasan bez konteksta
 
 # Klipovi čiji se trenutak smije izrezati ponovo (npr. loš render).
 napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29, 58]
@@ -192,25 +195,40 @@ samo_provjereni: true
 # REDOSLIJED = redoslijed objavljivanja.
 # Obavezni tekst kampanje i hashtag se dodaju sami.
 opisi:
-  52: "Seth Meyers' parents just hit 56 years of marriage and he says they're basically a vaudeville act"
-  55: "Seth Meyers' daughter allows him exactly one thing at bedtime: a firm handshake 😂"
-  31: "Harry Connick Jr. refused to set foot inside Carnegie Hall for 45 years. The reason is his mom"
-  51: "Strangers keep telling Seth Meyers he looks like... Seth Meyers 😂"
-  36: "Harry Connick Jr.'s mom ran for judge while fighting cancer. Seven men ran against her"
-  43: "Taylor Dayne isn't her real name. And her high school yearbook called it"
-  53: "The SNL audition advice Rachel Dratch gave Seth Meyers that he still passes on"
-  30: "Harry Connick Jr. lost his mom at 13. He says his love for her has only grown since"
-  44: "Taylor Dayne was singing in NYC clubs at 15. Her parents had no idea"
-  54: "Seth Meyers' favorite part of the day is the walk to school with his kids"
-  40: "Taylor Dayne sang about love her whole career, never married, and became a mom on her own terms"
-  33: "Harry Connick Jr.'s teacher told him to quit piano at 15. Then told his dad the opposite"
-  56: "Hoda was in tears by the end of this one. Seth Meyers on the hour that brings him the most joy"
-  41: "Taylor Dayne says music saved her life as a lonely kid on Long Island"
-  49: "Taylor Dayne's daughter followed her to Santa Barbara. Her son? 'He needs to get smarter' 😂"
-  34: "Harry Connick Jr. on being a kid who couldn't understand his mom wasn't coming back"
-  35: "Harry Connick Jr.'s mom eloped in Morocco and moved in with her Irish Catholic in-laws in New Orleans"
-  45: "How one 12-inch record turned Taylor Dayne into a star in 1987"
-  57: "Hoda reveals what Seth Meyers is really like at the gym 😂"
+  52: Seth Meyers' parents just hit 56 years of marriage and he says they're basically a vaudeville act
+  55: 'Seth Meyers'' daughter allows him exactly one thing at bedtime: a firm handshake 😂'
+  31: Harry Connick Jr. refused to set foot inside Carnegie Hall for 45 years. The reason is his mom
+  51: Strangers keep telling Seth Meyers he looks like... Seth Meyers 😂
+  36: Harry Connick Jr.'s mom ran for judge while fighting cancer. Seven men ran against her
+  43: Taylor Dayne isn't her real name. And her high school yearbook called it
+  53: The SNL audition advice Rachel Dratch gave Seth Meyers that he still passes on
+  30: Harry Connick Jr. lost his mom at 13. He says his love for her has only grown since
+  44: Taylor Dayne was singing in NYC clubs at 15. Her parents had no idea
+  54: Seth Meyers' favorite part of the day is the walk to school with his kids
+  40: Taylor Dayne sang about love her whole career, never married, and became a mom on her own terms
+  72: He's convinced his mom has been replaced by an impostor… and nobody believes him 👀
+  74: His friend's 'reverse cuckoo' theory about his mom is completely unhinged 😭
+  71: Everyone thinks he's crazy, but he KNOWS something is wrong with his mom
+  62: He tries to tell his best friend his mom's face looks different… it does not go well
+  33: Harry Connick Jr.'s teacher told him to quit piano at 15. Then told his dad the opposite
+  66: A cop accidentally tells him about a break-in he never knew happened 👀
+  56: Hoda was in tears by the end of this one. Seth Meyers on the hour that brings him the most joy
+  75: He asks his mom to make his childhood favorite… just to see if she remembers 👀
+  41: Taylor Dayne says music saved her life as a lonely kid on Long Island
+  63: His friends compare his impostor-mom theory to the wildest celebrity conspiracy
+  49: Taylor Dayne's daughter followed her to Santa Barbara. Her son? 'He needs to get smarter' 😂
+  68: Trying to explain to a private investigator that your mom has been replaced
+  34: Harry Connick Jr. on being a kid who couldn't understand his mom wasn't coming back
+  67: Connie Britton shutting down the vice principal to protect her son
+  35: Harry Connick Jr.'s mom eloped in Morocco and moved in with her Irish Catholic in-laws in New Orleans
+  59: Connie Britton as the mom who threatens a bully over voicemail 😂
+  45: How one 12-inch record turned Taylor Dayne into a star in 1987
+  73: When your mom is the principal and suspends you… so she can spend the day with you
+  57: Hoda reveals what Seth Meyers is really like at the gym 😂
+  69: Someone finally admits they see it too…
+  76: A 'dead body party' on a weeknight? He's suddenly very interested 👀
+  61: She says she's angry. He says she's terrified of losing control of him
+  70: Connie Britton gets emotional talking about the reason she became a principal
 
 # Hook naslov velikim slovima na vrhu videa (iznad slike), cijelo vrijeme klipa.
 # Piše ga Claude nakon provjere; dodaje se na video prije prve objave.
