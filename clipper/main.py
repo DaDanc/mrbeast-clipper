@@ -424,7 +424,7 @@ def cmd_reschedule() -> None:
             old = _local(_parse_iso(p["dueAt"]))
             try:
                 buffer.set_post_time(p, ch["service"], _utc_iso(slot))
-                print(f"   {old} → {_local(slot)}   {p['text'][:50]!r}")
+                print(f"::notice::{ch['service']}: {old} → {_local(slot)}   {p['text'][:40]!r}")
             except Exception as e:
                 print(f"   ⚠️ {p['text'][:50]!r}: {e}")
     print("✅ Gotovo.")
