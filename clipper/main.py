@@ -625,6 +625,21 @@ def cmd_auto(dry: bool = False) -> None:
         cmd_make(" ".join(v["url"] for v in new), 1, "", int(campaign_cfg(key).get("auto_klipova", 10)),
                  kampanja=key)
 
+# ---------------------------------------------------------------- probe
+def cmd_probe(kampanja: str) -> None:
+    """Ispiši audio/video tragove epizoda iz Frame.io mape (dijagnostika)."""
+    from . import frameio
+    with use_campaign(kampanja):
+        vids = frameio.list_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
+                                   str(CFG.get("preskoci_datoteke") or ""))
+    for v in vids[:1]:
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                              "stream=index,codec_type,codec_name,channels,channel_layout:stream_tags=title,handler_name",
+                              "-of", "compact", v["url"]], capture_output=True, text=True, timeout=300)
+        for line in (out.stdout or out.stderr).splitlines()[:20]:
+            print(f"::notice::{v['name']}: {line}")
+
+
 # ---------------------------------------------------------------- requeue
 def cmd_requeue(nums: list[int]) -> None:
     """Vrati klipove u red za objavu (npr. nakon što su stare objave maknute iz Buffera)."""
@@ -773,6 +788,8 @@ def main() -> None:
     sub.add_parser("reschedule")
     sub.add_parser("daily")
     sub.add_parser("views")
+    pr = sub.add_parser("probe")
+    pr.add_argument("--kampanja", default="")
     au = sub.add_parser("auto")
     au.add_argument("--dry", action="store_true")
     rq = sub.add_parser("requeue")
@@ -790,6 +807,8 @@ def main() -> None:
         cmd_reschedule()
     elif a.cmd == "views":
         cmd_views()
+    elif a.cmd == "probe":
+        cmd_probe(a.kampanja or None)
     elif a.cmd == "auto":
         cmd_auto(a.dry)
     elif a.cmd == "requeue":

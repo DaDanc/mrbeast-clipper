@@ -1,0 +1,28 @@
+name: 7. Dijagnostika epizode
+
+on:
+  workflow_dispatch:
+    inputs:
+      kampanja:
+        description: "Kampanja (npr. phony)"
+        default: "phony"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install pyyaml requests playwright
+          python -m playwright install --with-deps chromium
+      - env:
+          K: ${{ inputs.kampanja }}
+        run: python -m clipper.main probe --kampanja "$K"
