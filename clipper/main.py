@@ -512,7 +512,8 @@ def cmd_auto(dry: bool = False) -> None:
     if not share:
         print("Nema frameio_mapa u configu.")
         return
-    vids = frameio.list_videos(share, int(CFG.get("min_minuta_epizode", 10)))
+    vids = frameio.list_videos(share, int(CFG.get("min_minuta_epizode", 10)),
+                               str(CFG.get("preskoci_datoteke") or ""))
     done = set(used_ranges().keys())
     norm = lambda n: re.sub(r"[^\w.-]", "_", n)  # noqa: E731
     new = [v for v in vids if norm(v["name"]) not in done]

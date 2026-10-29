@@ -17,7 +17,7 @@ def _seconds(text: str) -> int:
     return s
 
 
-def list_videos(share_url: str, min_minutes: int = 10) -> list[dict]:
+def list_videos(share_url: str, min_minutes: int = 10, skip: str = "") -> list[dict]:
     """Vrati [{name, seconds, url}] za sve dugačke videe (cijele epizode) u mapi."""
     from playwright.sync_api import sync_playwright
 
@@ -35,15 +35,17 @@ def list_videos(share_url: str, min_minutes: int = 10) -> list[dict]:
             btn = buttons.nth(i)
             label = btn.get_attribute("aria-label") or btn.inner_text() or ""
             name = re.sub(r"\s*Download Asset\s*$", "", label).strip()
-            # trajanje piše na kartici (npr. "55:12")
+            # trajanje je zasebna linija na kartici (npr. "55:12"), iznad imena datoteke
             card_text = btn.evaluate(
-                "el => { let c = el; for (let k = 0; k < 8 && c; k++) {"
-                " c = c.parentElement; if (c && /\\d+:\\d{2}/.test(c.innerText)) return c.innerText; }"
+                "el => { let c = el; for (let k = 0; k < 10 && c; k++) {"
+                " c = c.parentElement; if (c && /^\\s*\\d{1,2}:\\d{2}(:\\d{2})?\\s*$/m.test(c.innerText)) return c.innerText; }"
                 " return ''; }"
             )
-            m = re.search(r"\b(\d{1,2}:\d{2}(?::\d{2})?)\b", card_text or "")
+            m = re.search(r"^\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*$", card_text or "", re.M)
             secs = _seconds(m.group(1)) if m else 0
-            if secs < min_minutes * 60:
+            if skip and re.search(skip, name):
+                continue
+            if secs and secs < min_minutes * 60:  # nepoznato trajanje → ne preskači
                 continue
             try:
                 with page.expect_download(timeout=60_000) as dl:
