@@ -503,6 +503,31 @@ def cmd_links() -> None:
         print(f"#{n}: linkovi skupljeni.")
 
 
+# ---------------------------------------------------------------- auto (nove epizode)
+def cmd_auto(dry: bool = False) -> None:
+    """Pogledaj Frame.io mapu kampanje i napravi klipove iz epizoda koje još nismo obradili."""
+    from . import frameio
+
+    share = str(CFG.get("frameio_mapa") or "").strip()
+    if not share:
+        print("Nema frameio_mapa u configu.")
+        return
+    vids = frameio.list_videos(share, int(CFG.get("min_minuta_epizode", 10)))
+    done = set(used_ranges().keys())
+    norm = lambda n: re.sub(r"[^\w.-]", "_", n)  # noqa: E731
+    new = [v for v in vids if norm(v["name"]) not in done]
+    for v in vids:
+        state = "NOVA" if v in new else "već obrađena"
+        print(f"::notice::{v['name']} ({v['seconds'] // 60} min): {state}")
+    if not new or dry:
+        return
+    tracker = tracker_issue()
+    names = ", ".join(v["name"] for v in new)
+    comment(tracker, f"{owner_mention()}🆕 **Nove epizode u Frame.io mapi:** {names}\n\n"
+                     "Radim klipove. Kad budu gotovi, Claude ih provjeri i napiše opise prije objave.")
+    cmd_make(" ".join(v["url"] for v in new), 1, "", int(CFG.get("auto_klipova", 10)))
+
+
 # ---------------------------------------------------------------- requeue
 def cmd_requeue(nums: list[int]) -> None:
     """Vrati klipove u red za objavu (npr. nakon što su stare objave maknute iz Buffera)."""
@@ -649,6 +674,8 @@ def main() -> None:
     sub.add_parser("reschedule")
     sub.add_parser("daily")
     sub.add_parser("views")
+    au = sub.add_parser("auto")
+    au.add_argument("--dry", action="store_true")
     rq = sub.add_parser("requeue")
     rq.add_argument("--issues", default="")
     a = p.parse_args()
@@ -664,6 +691,8 @@ def main() -> None:
         cmd_reschedule()
     elif a.cmd == "views":
         cmd_views()
+    elif a.cmd == "auto":
+        cmd_auto(a.dry)
     elif a.cmd == "requeue":
         cmd_requeue([int(x) for x in re.split(r"[,\s]+", a.issues) if x.strip()])
     else:

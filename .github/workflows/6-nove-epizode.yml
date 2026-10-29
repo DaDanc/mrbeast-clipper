@@ -1,0 +1,56 @@
+name: 6. Nove epizode (automatski)
+
+on:
+  schedule:
+    - cron: "0 9 * * *"    # svaki dan u 10:00 po našem vremenu
+    - cron: "0 21 * * *"   # i u 22:00
+  workflow_dispatch:
+    inputs:
+      samo_provjeri:
+        description: "Samo ispiši što ima u mapi, ne radi klipove"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: make-clips
+  cancel-in-progress: false
+
+jobs:
+  auto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+      BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Instaliraj ffmpeg i font
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          mkdir -p fonts
+          curl -sSfL -o fonts/Anton-Regular.ttf \
+            https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf || rm -f fonts/Anton-Regular.ttf
+      - name: Instaliraj Python pakete i preglednik
+        run: |
+          pip install -r requirements.txt playwright
+          python -m playwright install --with-deps chromium
+      - name: Spremi Whisper model u cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: whisper-${{ hashFiles('config.yaml') }}
+          restore-keys: whisper-
+      - name: Provjeri mapu i napravi klipove iz novih epizoda
+        env:
+          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.samo_provjeri && '--dry' || '' }}
+        run: python -m clipper.main auto $DRY

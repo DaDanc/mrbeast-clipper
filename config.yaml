@@ -2,6 +2,12 @@
 #  POSTAVKE KLIPERA - ovo smiješ mijenjati
 # ==============================================================
 
+# Javna Frame.io mapa kampanje. Svaki dan se provjeri ima li novih epizoda
+# (dužih od min_minuta_epizode) i iz njih se sami naprave klipovi.
+frameio_mapa: "https://f.io/RWHt_IEp"
+min_minuta_epizode: 10
+auto_klipova: 10
+
 # Koliko klipova napraviti iz jednog videa
 clips_per_video: 8
 
