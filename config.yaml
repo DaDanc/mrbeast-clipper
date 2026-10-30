@@ -152,7 +152,7 @@ post_times:
 # drži u Bufferu ovoliko objava na čekanju (po 3 dnevno u post_times terminima),
 # uzimajući najbolje neobjavljene klipove. 9 = 3 dana unaprijed.
 # Buffer besplatno dopušta najviše 10 zakazanih objava po kanalu.
-daily_posts: 0   # PRIVREMENO dok traje ponovni render (bilo 9)
+daily_posts: 9
 
 # Obavijest na mobitel za SVAKU objavu (false = samo zapis u "Linkovi za Vyro", bez obavijesti).
 # Ugašeno: s jednom Vyro predajom bitne su samo obavijesti o pregledima ispod.
