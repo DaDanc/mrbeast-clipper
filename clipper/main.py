@@ -266,6 +266,10 @@ def next_slot(taken: list, rng=None) -> "datetime":
 
     tz = ZoneInfo(CFG.get("timezone", "Europe/Zagreb"))
     now = datetime.now(tz) + timedelta(minutes=15)
+    pauza = str(CFG.get("pauza_do") or "").strip()
+    if pauza:  # npr. "2026-10-31 18:00" – prije toga se ništa ne objavljuje
+        p = datetime.strptime(pauza, "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+        now = max(now, p)
     rng = rng or random.Random()
 
     gap = CFG.get("razmak_minuta")
