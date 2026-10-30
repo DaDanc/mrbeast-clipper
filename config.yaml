@@ -133,10 +133,9 @@ post_mode: schedule
 timezone: Europe/Zagreb
 # Objava svakih 60–100 min (svaki put drugo vrijeme), samo u prozoru 14:00–04:00
 # (= 8:00–22:00 u New Yorku). Ako ovo obrišeš, vrijede fiksni post_times ispod.
-razmak_minuta: [240, 330]   # bilo [60, 100] – TikTok je nakon toga spustio preglede na ~5 po videu
-# Do kada ništa ne objavljivati (odmor računu nakon prečestog objavljivanja). Prazno = nema pauze.
-pauza_do: "2026-10-31 18:00"
-prozor_objava: ["14:00", "04:00"]
+# razmak_minuta: [60, 100]   # isključeno 30.10. – vraćeni fiksni termini (3 dnevno) jer je TikTok pao
+# pauza_do: ""
+# prozor_objava: ["14:00", "04:00"]
 post_times:
   - "18:00"
   - "20:30"
