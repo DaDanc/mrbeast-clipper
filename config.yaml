@@ -146,6 +146,10 @@ post_times:
 # Buffer besplatno dopušta najviše 10 zakazanih objava po kanalu.
 daily_posts: 9
 
+# Obavijest na mobitel za SVAKU objavu (false = samo zapis u "Linkovi za Vyro", bez obavijesti).
+# Ugašeno: s jednom Vyro predajom bitne su samo obavijesti o pregledima ispod.
+obavijest_za_svaku_objavu: false
+
 # Obavijest (GitHub, s @mention) kad TikTok objava prijeđe ove brojeve pregleda.
 # Provjerava se svaki sat, za objave iz zadnjih "prati_dana" dana.
 obavijest_pregledi: [500, 1000, 5000]

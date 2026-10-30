@@ -584,7 +584,8 @@ def cmd_links() -> None:
             repo = os.environ.get("GITHUB_REPOSITORY", "")
             warm = ("\n\n🔥 **Sad je vrijeme za 15 min na TikToku** (skrolanje u niši + odgovori na komentare) – "
                     f"[upute](https://github.com/{repo}/blob/main/ZAGRIJAVANJE.md)")
-        comment(tracker, f"{owner_mention()}🔔 **Objavljeno: {iss['title']}** (#{n})\n{text}\n\n"
+        ping = owner_mention() if CFG.get("obavijest_za_svaku_objavu", False) else ""
+        comment(tracker, f"{ping}🔔 **Objavljeno: {iss['title']}** (#{n})\n{text}\n\n"
                          "Predaj TikTok link na Vyro → kampanja → **Submit Post** (ako imaš slobodno mjesto)." + warm)
         gh("issue", "edit", str(n), "--add-label", L_LINKS)
         gh("issue", "close", str(n))
