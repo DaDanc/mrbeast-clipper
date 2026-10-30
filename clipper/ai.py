@@ -139,7 +139,9 @@ Pick up to {n * 2} candidate clips, then grade each honestly. Rules for a good c
 1. Length between {min_s:.0f} and {max_s:.0f} seconds (end time of last segment minus start time of first).
 2. It must make sense to someone who never saw the video: starts at the beginning of a thought or question,
    NOT mid-sentence or mid-story; ends on a punchline, reveal or completed thought, NOT mid-sentence.
-3. Strong first 3 seconds: a surprising statement, a question, a laugh, an emotional moment.
+3. The FIRST SENTENCE decides everything: most viewers swipe away after 1-2 seconds. The clip must open
+   directly on the most gripping line (a surprising claim, a sharp question, a laugh, a reveal) - never on
+   filler like "So", "Yeah", "Okay", greetings or set-up. If the best line comes later, start right at it.
 4. One story or idea per clip. Funny, surprising, emotional and "I didn't know that" moments do best.
 5. Reject (score 1-3) anything out of context, confusing, where the transcript looks garbled/misheard,
    just ads/sponsor reads/intros/outros, or sensitive topics that could be misleading without context
@@ -148,7 +150,7 @@ Pick up to {n * 2} candidate clips, then grade each honestly. Rules for a good c
 7. Clips must not overlap each other.
 
 For each clip write:
-- "hook": on-screen title for the first 3 seconds, max 8 words, makes people want to keep watching,
+- "hook": on-screen title shown at the top for the whole clip, max 8 words, makes people want to keep watching,
   must be TRUE to what is said (no fake clickbait). Name the guest if known.
 - "caption": one sentence for the post description, same style as these examples:
 {ex}
