@@ -712,6 +712,11 @@ def _rerender_group(camp, source, items, links, layout, work) -> None:
                                            str(CFG.get("preskoci_datoteke") or ""))
                 links[camp] = {norm(v["name"]): v["url"] for v in vids}
             url = links[camp].get(source)
+            if not url:  # Frame.io zna ne dati sve linkove iz prve – pokušaj još jednom
+                vids = frameio.list_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
+                                           str(CFG.get("preskoci_datoteke") or ""))
+                links[camp].update({norm(v["name"]): v["url"] for v in vids})
+                url = links[camp].get(source)
             if not url:
                 print(f"::warning::{camp}: ne nalazim {source} u Frame.io mapi")
                 return

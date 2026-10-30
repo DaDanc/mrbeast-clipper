@@ -55,7 +55,7 @@ def build_ass(clip: Clip, segments: list[Segment], path: Path, group: int = 3, s
     font = _font()
     full = layout == "full"
     cap_size = (104 if full else 92) if font == "Anton" else 86
-    hook_size = (76 if full else 70) if font == "Anton" else 62
+    hook_size = (92 if full else 70) if font == "Anton" else 66
     # full: hook gore preko slike (ispod TikTokovih gumba), cijelo vrijeme; titlovi u donjoj trećini
     hook_margin = 250 if full else FG_Y - 260
     header = f"""[Script Info]
