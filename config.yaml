@@ -77,6 +77,11 @@ caption_template: |
 
   Joy 101 with Hoda Kotb, an iHeart podcast. New episodes every Wednesday on YouTube. {hashtags}
 
+# Izgled klipa:
+#   full = lice preko cijelog ekrana (9:16 izrez oko lica), hook gore cijelo vrijeme, veliki titlovi
+#   blur = stari izgled: video u sredini, mutna pozadina gore i dolje
+izgled: full
+
 # Naslov (hook) velikim slovima na vrhu videa u prve 4 s.
 #   auto  = samo kad je klip odabrao AI (on piše pravi hook, a ne komad rečenice)
 #   true / false = uvijek / nikad

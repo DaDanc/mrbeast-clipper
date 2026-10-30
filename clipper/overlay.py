@@ -25,11 +25,13 @@ def _esc(text: str) -> str:
     return text.replace("\\", "").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
-def _ass(text: str, duration: float, path: Path) -> Path:
+def _ass(text: str, duration: float, path: Path, layout: str = "blur") -> Path:
     font = _font()
     size = 100 if font == "Anton" else 80
     # tekst stoji tik iznad srednjeg videa (Alignment 2 = dolje-sredina, MarginV od dna ekrana)
     margin_v = H - (FG_Y - 45)
+    if layout == "full":  # lice preko cijelog ekrana → tekst gore, ispod TikTokovih gumba
+        margin_v = H - 250 - 300
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
@@ -64,7 +66,7 @@ def _duration(p: Path) -> float:
         return 60.0
 
 
-def add_hook(video_url: str, text: str, workdir: Path, name: str) -> Path:
+def add_hook(video_url: str, text: str, workdir: Path, name: str, layout: str = "blur") -> Path:
     workdir.mkdir(parents=True, exist_ok=True)
     src = workdir / f"{name}-src.mp4"
     with requests.get(video_url, stream=True, timeout=120) as r:
@@ -72,7 +74,7 @@ def add_hook(video_url: str, text: str, workdir: Path, name: str) -> Path:
         with open(src, "wb") as f:
             for chunk in r.iter_content(1 << 20):
                 f.write(chunk)
-    ass = _ass(text, _duration(src), workdir / f"{name}.ass")
+    ass = _ass(text, _duration(src), workdir / f"{name}.ass", layout)
     out = workdir / f"{name}.mp4"
     ass_arg = str(ass).replace("\\", "/").replace(":", "\\:")
     fonts_arg = str(FONTS_DIR).replace(":", "\\:")

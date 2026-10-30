@@ -1,0 +1,54 @@
+name: 8. Ponovni render klipova (novi izgled)
+
+on:
+  workflow_dispatch:
+    inputs:
+      klipovi:
+        description: "Brojevi klipova (npr. 62,66). Prazno = svi provjereni neobjavljeni"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: make-clips
+  cancel-in-progress: false
+
+jobs:
+  rerender:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+    steps:
+      - name: Oslobodi prostor na disku
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Instaliraj ffmpeg i font
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          mkdir -p fonts
+          curl -sSfL -o fonts/Anton-Regular.ttf \
+            https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf || rm -f fonts/Anton-Regular.ttf
+      - name: Instaliraj Python pakete i preglednik
+        run: |
+          pip install -r requirements.txt playwright
+          python -m playwright install --with-deps chromium
+      - name: Spremi Whisper model u cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: whisper-${{ hashFiles('config.yaml') }}
+          restore-keys: whisper-
+      - name: Ponovni render
+        env:
+          KLIPOVI: ${{ inputs.klipovi }}
+        run: python -m clipper.main rerender --issues "$KLIPOVI"

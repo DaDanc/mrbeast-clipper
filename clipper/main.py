@@ -196,7 +196,8 @@ def _make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> No
             print(f"▶ Renderiram klip {ci + 1}/{len(clips)} ({fmt_time(clip.start)}-{fmt_time(clip.end)})", flush=True)
             nv = CFG.get("naslov_na_videu", "auto")
             show_hook = clip.ai if str(nv).lower() == "auto" else bool(nv)
-            render.render(video, clip, segs, out, work, show_hook=show_hook, audio_mix=CFG.get("audio_mix"))
+            render.render(video, clip, segs, out, work, show_hook=show_hook, audio_mix=CFG.get("audio_mix"),
+                          layout=str(CFG.get("izgled", "blur")))
             video_url = hosting.upload(out, name)
             thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
 
@@ -205,7 +206,9 @@ def _make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> No
             yt_title = CFG["youtube_title_template"].format(hook=clip.hook if clip.ai else desc, hashtags=tags)[:100]
             data = {"video_url": video_url, "caption": caption, "yt_title": yt_title,
                     "source": video.name, "start": round(clip.start, 2), "end": round(clip.end, 2),
-                    "score": round(clip.score, 2), "ai": clip.ai, "kampanja": CFG.get("_kampanja")}
+                    "score": round(clip.score, 2), "ai": clip.ai, "kampanja": CFG.get("_kampanja"),
+                    "hook": clip.hook, "izgled": str(CFG.get("izgled", "blur")),
+                    "overlay": bool(show_hook and str(CFG.get("izgled", "blur")) == "full")}
             grade = f"🤖 AI ocjena {clip.score:.0f}/10" if clip.ai else f"ocjena {clip.score:.1f}"
             body = f"""[![pregled]({thumb})]({video_url})
 
@@ -365,7 +368,8 @@ def _publish(issue: int, at: str = "") -> None:
     if hook and not data.get("overlay"):
         from . import hosting, overlay
         print(f"▶ Dodajem naslov na video: {hook}", flush=True)
-        out = overlay.add_hook(data["video_url"], hook, ROOT / "work", f"hook-{issue}")
+        out = overlay.add_hook(data["video_url"], hook, ROOT / "work", f"hook-{issue}",
+                              str(data.get("izgled", "blur")))
         new_url = hosting.upload(out, f"hook-{issue}-{int(time.time())}")
         body = info["body"].replace(data["video_url"], new_url)
         saved = dict(read_json_marker(body, "CLIPDATA") or {})
@@ -652,6 +656,84 @@ def cmd_probe(kampanja: str) -> None:
             print(f"::notice::trag {k}: prosjek {mean.group(1) if mean else '?'} dB, max {mx.group(1) if mx else '?'} dB")
 
 
+# ---------------------------------------------------------------- rerender
+def cmd_rerender(only: list[int] | None = None) -> None:
+    """Ponovo izrenderiraj neobjavljene klipove u trenutnom izgledu (config "izgled") s hook naslovom.
+    Izvorne epizode skida sam iz Frame.io mape kampanje."""
+    import shutil
+    from . import fetch, frameio, hosting, render, transcribe
+    from .highlights import Clip
+
+    layout = str(BASE_CFG.get("izgled", "full"))
+    issues = json.loads(gh("issue", "list", "--state", "open", "--label", L_CLIP, "--limit", "300",
+                           "--json", "number,title,body,labels"))
+    skip = {int(x) for x in (BASE_CFG.get("preskoci") or [])}
+    reviewed = {int(x) for x in (BASE_CFG.get("opisi") or {})}
+    groups: dict[tuple[str, str], list[tuple[dict, dict]]] = {}
+    for i in issues:
+        n = i["number"]
+        names = {l["name"] for l in i["labels"]}
+        d = read_json_marker(i.get("body") or "", "CLIPDATA")
+        if not d or n in skip or L_LINKS in names or d.get("izgled") == layout:
+            continue
+        if only and n not in only:
+            continue
+        if not only and n not in reviewed and not d.get("ai"):
+            continue
+        camp = d.get("kampanja") or default_campaign()
+        if not campaign_active(camp):
+            continue
+        groups.setdefault((camp, d["source"]), []).append((i, d))
+    print(f"::notice::Za ponovni render: {sum(len(v) for v in groups.values())} klipova iz {len(groups)} epizoda")
+
+    norm = lambda n: re.sub(r"[^\w.-]", "_", n)  # noqa: E731
+    work = ROOT / "work"
+    work.mkdir(exist_ok=True)
+    links: dict[str, dict[str, str]] = {}
+    for (camp, source), items in groups.items():
+        with use_campaign(camp):
+            if camp not in links:
+                vids = frameio.list_videos(CFG["frameio_mapa"], 0, "")
+                links[camp] = {norm(v["name"]): v["url"] for v in vids}
+            url = links[camp].get(source)
+            if not url:
+                print(f"::warning::{camp}: ne nalazim {source} u Frame.io mapi")
+                continue
+            src = work / "rsrc"
+            shutil.rmtree(src, ignore_errors=True)
+            video = fetch.fetch(url, src, 1)[0]
+            wav = transcribe.extract_audio(video, work / "r.wav", CFG.get("audio_govor"))
+            segs = transcribe.transcribe(wav, CFG.get("whisper_model", "small"))
+            wav.unlink(missing_ok=True)
+            for i, d in items:
+                n = i["number"]
+                hook = ((CFG.get("naslovi") or {}).get(n) or d.get("hook")
+                        or re.sub(r"^\W+\s*", "", i["title"]))
+                clip = Clip(float(d["start"]), float(d["end"]), float(d.get("score", 0)), hook, "")
+                out = work / f"re-{n}.mp4"
+                try:
+                    render.render(video, clip, segs, out, work, show_hook=True,
+                                  audio_mix=CFG.get("audio_mix"), layout=layout, hook_text=hook)
+                    new_url = hosting.upload(out, f"re-{n}-{int(time.time())}")
+                except Exception as e:  # noqa: BLE001
+                    print(f"::error::#{n}: render nije uspio ({e})")
+                    continue
+                body = i["body"].replace(d["video_url"], new_url)
+                old_thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", d["video_url"]).rsplit(".", 1)[0]
+                new_thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", new_url).rsplit(".", 1)[0]
+                body = body.replace(old_thumb, new_thumb)
+                nd = dict(d)
+                nd.update({"video_url": new_url, "izgled": layout, "overlay": True, "hook": hook})
+                body = re.sub(r"<!--CLIPDATA\s*\{.*?\}\s*-->",
+                              lambda _: f"<!--CLIPDATA {json.dumps(nd, ensure_ascii=False)} -->", body, flags=re.S)
+                with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+                    f.write(body)
+                gh("issue", "edit", str(n), "--body-file", f.name)
+                out.unlink(missing_ok=True)
+                print(f"::notice::#{n} ({source}) → novi izgled: {hook}")
+            shutil.rmtree(src, ignore_errors=True)
+
+
 # ---------------------------------------------------------------- requeue
 def cmd_requeue(nums: list[int]) -> None:
     """Vrati klipove u red za objavu (npr. nakon što su stare objave maknute iz Buffera)."""
@@ -800,6 +882,8 @@ def main() -> None:
     sub.add_parser("reschedule")
     sub.add_parser("daily")
     sub.add_parser("views")
+    rr = sub.add_parser("rerender")
+    rr.add_argument("--issues", default="")
     pr = sub.add_parser("probe")
     pr.add_argument("--kampanja", default="")
     au = sub.add_parser("auto")
@@ -819,6 +903,8 @@ def main() -> None:
         cmd_reschedule()
     elif a.cmd == "views":
         cmd_views()
+    elif a.cmd == "rerender":
+        cmd_rerender([int(x) for x in re.split(r"[,\s]+", a.issues) if x.strip()] or None)
     elif a.cmd == "probe":
         cmd_probe(a.kampanja or None)
     elif a.cmd == "auto":

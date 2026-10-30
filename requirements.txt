@@ -5,3 +5,4 @@ requests>=2.31
 gdown>=5.2
 yt-dlp
 cloudinary>=1.40
+opencv-python-headless>=4.8,<5
