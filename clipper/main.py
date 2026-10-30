@@ -691,14 +691,30 @@ def cmd_rerender(only: list[int] | None = None) -> None:
     work.mkdir(exist_ok=True)
     links: dict[str, dict[str, str]] = {}
     for (camp, source), items in groups.items():
+        try:
+            _rerender_group(camp, source, items, links, layout, work)
+        except Exception as e:  # noqa: BLE001
+            import traceback
+            tb = " / ".join(x.strip() for x in traceback.format_exc().strip().splitlines()[-6:])
+            print(f"::error::{camp} {source}: {e!r} | {tb}")
+
+
+def _rerender_group(camp, source, items, links, layout, work) -> None:
+    import shutil
+    from . import fetch, frameio, hosting, render, transcribe
+    from .highlights import Clip
+
+    norm = lambda n: re.sub(r"[^\w.-]", "_", n)  # noqa: E731
+    if True:
         with use_campaign(camp):
             if camp not in links:
-                vids = frameio.list_videos(CFG["frameio_mapa"], 0, "")
+                vids = frameio.list_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
+                                           str(CFG.get("preskoci_datoteke") or ""))
                 links[camp] = {norm(v["name"]): v["url"] for v in vids}
             url = links[camp].get(source)
             if not url:
                 print(f"::warning::{camp}: ne nalazim {source} u Frame.io mapi")
-                continue
+                return
             src = work / "rsrc"
             shutil.rmtree(src, ignore_errors=True)
             video = fetch.fetch(url, src, 1)[0]
