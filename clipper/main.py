@@ -718,7 +718,12 @@ def _rerender_group(camp, source, items, links, layout, work) -> None:
                 links[camp].update({norm(v["name"]): v["url"] for v in vids})
                 url = links[camp].get(source)
             if not url:
-                print(f"::warning::{camp}: ne nalazim {source} u Frame.io mapi")
+                print(f"::warning::{camp}: {source} više nije u Frame.io mapi – radim iz već gotovog klipa")
+                for i, d in items:
+                    try:
+                        _rerender_from_clip(i, d, layout, work)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"::error::#{i['number']}: {e!r}")
                 return
             src = work / "rsrc"
             shutil.rmtree(src, ignore_errors=True)
@@ -753,6 +758,48 @@ def _rerender_group(camp, source, items, links, layout, work) -> None:
                 out.unlink(missing_ok=True)
                 print(f"::notice::#{n} ({source}) → novi izgled: {hook}")
             shutil.rmtree(src, ignore_errors=True)
+
+
+def _rerender_from_clip(i: dict, d: dict, layout: str, work: Path) -> None:
+    """Kad izvorna epizoda više ne postoji: uzmi srednju (čistu) traku starog klipa,
+    ponovo prepoznaj govor iz njega i složi novi izgled."""
+    import requests
+    from . import hosting, render, transcribe
+    from .highlights import Clip
+
+    n = i["number"]
+    old = work / f"old-{n}.mp4"
+    with requests.get(d["video_url"], stream=True, timeout=120) as r:
+        r.raise_for_status()
+        with open(old, "wb") as f:
+            for ch in r.iter_content(1 << 20):
+                f.write(ch)
+    # u starom izgledu je slika u traci 1080x810 na sredini ekrana (gore/dolje su mutna pozadina i titlovi)
+    band = work / f"band-{n}.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(old),
+                    "-vf", f"crop=1080:{render.FG_H}:0:{render.FG_Y}", "-c:v", "libx264", "-preset", "veryfast",
+                    "-crf", "16", "-c:a", "copy", str(band)], check=True)
+    wav = transcribe.extract_audio(band, work / f"band-{n}.wav")
+    segs = transcribe.transcribe(wav, CFG.get("whisper_model", "small"))
+    wav.unlink(missing_ok=True)
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
+                                "default=nw=1:nk=1", str(band)], capture_output=True, text=True).stdout or 0)
+    hook = ((CFG.get("naslovi") or {}).get(n) or d.get("hook") or re.sub(r"^\W+\s*", "", i["title"]))
+    clip = Clip(0.0, dur, float(d.get("score", 0)), hook, "")
+    out = work / f"re-{n}.mp4"
+    render.render(band, clip, segs, out, work, show_hook=True, layout=layout, hook_text=hook)
+    new_url = hosting.upload(out, f"re-{n}-{int(time.time())}")
+    body = i["body"].replace(d["video_url"], new_url)
+    nd = dict(d)
+    nd.update({"video_url": new_url, "izgled": layout, "overlay": True, "hook": hook})
+    body = re.sub(r"<!--CLIPDATA\s*\{.*?\}\s*-->",
+                  lambda _: f"<!--CLIPDATA {json.dumps(nd, ensure_ascii=False)} -->", body, flags=re.S)
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+        f.write(body)
+    gh("issue", "edit", str(n), "--body-file", f.name)
+    for x in (old, band, out):
+        x.unlink(missing_ok=True)
+    print(f"::notice::#{n} (iz gotovog klipa) → novi izgled: {hook}")
 
 
 # ---------------------------------------------------------------- requeue
