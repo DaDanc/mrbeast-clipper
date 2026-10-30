@@ -559,8 +559,8 @@ def cmd_links() -> None:
         posts = {}
         for c in comments:
             m = read_json_marker(c["body"], "BUFFER_POSTS")
-            if m:
-                posts.update(m["posts"])
+            if m:  # vrijedi samo zadnja objava (starije su možda maknute u Drafts i vraćene u red)
+                posts = dict(m["posts"])
         results, finished = [], True
         for pid, service in posts.items():
             try:
