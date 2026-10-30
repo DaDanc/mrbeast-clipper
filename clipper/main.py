@@ -674,7 +674,8 @@ def cmd_rerender(only: list[int] | None = None) -> None:
         n = i["number"]
         names = {l["name"] for l in i["labels"]}
         d = read_json_marker(i.get("body") or "", "CLIPDATA")
-        if not d or n in skip or L_LINKS in names or d.get("izgled") == layout:
+        ver = int(BASE_CFG.get("izgled_verzija", 1))
+        if not d or n in skip or L_LINKS in names or (d.get("izgled") == layout and int(d.get("v", 1)) >= ver):
             continue
         if only and n not in only:
             continue
@@ -749,7 +750,8 @@ def _rerender_group(camp, source, items, links, layout, work) -> None:
                 new_thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", new_url).rsplit(".", 1)[0]
                 body = body.replace(old_thumb, new_thumb)
                 nd = dict(d)
-                nd.update({"video_url": new_url, "izgled": layout, "overlay": True, "hook": hook})
+                nd.update({"video_url": new_url, "izgled": layout, "overlay": True, "hook": hook,
+                           "v": int(BASE_CFG.get("izgled_verzija", 1))})
                 body = re.sub(r"<!--CLIPDATA\s*\{.*?\}\s*-->",
                               lambda _: f"<!--CLIPDATA {json.dumps(nd, ensure_ascii=False)} -->", body, flags=re.S)
                 with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
@@ -791,7 +793,8 @@ def _rerender_from_clip(i: dict, d: dict, layout: str, work: Path) -> None:
     new_url = hosting.upload(out, f"re-{n}-{int(time.time())}")
     body = i["body"].replace(d["video_url"], new_url)
     nd = dict(d)
-    nd.update({"video_url": new_url, "izgled": layout, "overlay": True, "hook": hook})
+    nd.update({"video_url": new_url, "izgled": layout, "overlay": True, "hook": hook,
+               "v": int(BASE_CFG.get("izgled_verzija", 1))})
     body = re.sub(r"<!--CLIPDATA\s*\{.*?\}\s*-->",
                   lambda _: f"<!--CLIPDATA {json.dumps(nd, ensure_ascii=False)} -->", body, flags=re.S)
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:

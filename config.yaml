@@ -81,6 +81,8 @@ caption_template: |
 #   full = lice preko cijelog ekrana (9:16 izrez oko lica), hook gore cijelo vrijeme, veliki titlovi
 #   blur = stari izgled: video u sredini, mutna pozadina gore i dolje
 izgled: full
+# Verzija izgleda (2 = izrez prati lice u svakom kadru posebno). Povećaj pa pokreni "8. Ponovni render".
+izgled_verzija: 2
 
 # Naslov (hook) velikim slovima na vrhu videa u prve 4 s.
 #   auto  = samo kad je klip odabrao AI (on piše pravi hook, a ne komad rečenice)

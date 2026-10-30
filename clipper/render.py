@@ -175,6 +175,39 @@ def face_center(video: Path, start: float, dur: float, samples: int = 9) -> floa
     return float(xs[len(xs) // 2])
 
 
+def shot_cuts(video: Path, start: float, dur: float, thr: float = 0.3) -> list[float]:
+    """Vremena rezova kadra (u sekundama od početka klipa)."""
+    import re as _re
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-ss", f"{start:.2f}", "-t", f"{dur:.2f}", "-i", str(video),
+                        "-an", "-vf", f"scale=320:-2,select='gt(scene,{thr})',showinfo", "-f", "null", "-"],
+                       capture_output=True, text=True)
+    cuts = [float(x) for x in _re.findall(r"pts_time:([0-9.]+)", r.stderr)]
+    out = []
+    for c in cuts:  # spoji rezove bliže od 1 s
+        if c > 0.5 and (not out or c - out[-1] > 1.0):
+            out.append(c)
+    return out
+
+
+def crop_x_expr(video: Path, clip: Clip, scaled_w: int) -> str:
+    """Izraz za ffmpeg crop: za svaki kadar posebno centrira lice (tko je u kadru, taj je u sredini)."""
+    def x_for(fx: float) -> int:
+        return int(min(max(fx * scaled_w - W / 2, 0), max(scaled_w - W, 0)))
+
+    cuts = shot_cuts(video, clip.start, clip.duration)[:40]
+    bounds = [0.0] + cuts + [clip.duration]
+    xs = []
+    for a, b in zip(bounds, bounds[1:]):
+        fx = face_center(video, clip.start + a, max(b - a, 0.3), samples=3 if b - a < 4 else 5)
+        xs.append(x_for(fx))
+    if len(xs) == 1:
+        return str(xs[0])
+    expr = str(xs[-1])
+    for t, x in reversed(list(zip(cuts, xs[:-1]))):
+        expr = f"if(lt(t\\,{t:.2f})\\,{x}\\,{expr})"
+    return expr
+
+
 def render(video: Path, clip: Clip, segments: list[Segment], out: Path, workdir: Path,
            show_hook: bool = True, audio_mix: list[int] | None = None,
            layout: str = "blur", hook_text: str = "") -> Path:
@@ -187,9 +220,8 @@ def render(video: Path, clip: Clip, segments: list[Segment], out: Path, workdir:
     if layout == "full":
         sw, sh = _size(video)
         scaled_w = int(round(sw * H / sh / 2)) * 2
-        fx = face_center(video, clip.start, clip.duration)
-        x = int(min(max(fx * scaled_w - W / 2, 0), max(scaled_w - W, 0)))
-        vf = (f"[0:v]scale={scaled_w}:{H},crop={W}:{H}:{x}:0,fps=30,"
+        x = crop_x_expr(video, clip, scaled_w)
+        vf = (f"[0:v]scale={scaled_w}:{H},crop={W}:{H}:'{x}':0,fps=30,"
               f"ass='{ass_arg}':fontsdir='{fonts_arg}',format=yuv420p[v]")
     else:
       vf = (
