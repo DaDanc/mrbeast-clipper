@@ -208,6 +208,7 @@ def _make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> No
                     "source": video.name, "start": round(clip.start, 2), "end": round(clip.end, 2),
                     "score": round(clip.score, 2), "ai": clip.ai, "kampanja": CFG.get("_kampanja"),
                     "hook": clip.hook, "izgled": str(CFG.get("izgled", "blur")),
+                    "v": int(CFG.get("izgled_verzija", 1)),
                     "overlay": bool(show_hook and str(CFG.get("izgled", "blur")) == "full")}
             grade = f"🤖 AI ocjena {clip.score:.0f}/10" if clip.ai else f"ocjena {clip.score:.1f}"
             body = f"""[![pregled]({thumb})]({video_url})
@@ -601,13 +602,15 @@ def cmd_links() -> None:
 
 
 # ---------------------------------------------------------------- auto (nove epizode)
-def cmd_auto(dry: bool = False) -> None:
+def cmd_auto(dry: bool = False, again: bool = False, only: str | None = None) -> None:
     """Za svaku aktivnu kampanju pogledaj njezinu Frame.io mapu i napravi klipove iz novih epizoda."""
     from . import frameio
 
     done = set(used_ranges().keys())
     norm = lambda n: re.sub(r"[^\w.-]", "_", n)  # noqa: E731
     for key in (BASE_CFG.get("kampanje") or {}):
+        if only and key != only:
+            continue
         if not campaign_active(key):
             print(f"::notice::{key}: kampanja je završila, preskačem.")
             continue
@@ -621,7 +624,8 @@ def cmd_auto(dry: bool = False) -> None:
             except Exception as e:  # noqa: BLE001
                 print(f"::error::{key}: ne mogu pročitati Frame.io mapu ({e})")
                 continue
-            new = [v for v in vids if norm(v["name"]) not in done]
+            # again = još klipova i iz već obrađenih epizoda (iskorišteni trenuci se preskaču sami)
+            new = list(vids) if again else [v for v in vids if norm(v["name"]) not in done]
             for v in vids:
                 state = "NOVA" if v in new else "već obrađena"
                 print(f"::notice::{key}: {v['name']} ({v['seconds'] // 60} min): {state}")
@@ -629,8 +633,9 @@ def cmd_auto(dry: bool = False) -> None:
                 continue
             tracker = tracker_issue()
             names = ", ".join(v["name"] for v in new)
-            comment(tracker, f"{owner_mention()}🆕 **{CFG.get('naziv', key)} – nove epizode:** {names}\n\n"
-                             "Radim klipove. Kad budu gotovi, Claude ih provjeri prije objave.")
+            if not again:
+                comment(tracker, f"{owner_mention()}🆕 **{CFG.get('naziv', key)} – nove epizode:** {names}\n\n"
+                                 "Radim klipove. Kad budu gotovi, Claude ih provjeri prije objave.")
         cmd_make(" ".join(v["url"] for v in new), 1, "", int(campaign_cfg(key).get("auto_klipova", 10)),
                  kampanja=key)
 
@@ -959,6 +964,8 @@ def main() -> None:
     pr.add_argument("--kampanja", default="")
     au = sub.add_parser("auto")
     au.add_argument("--dry", action="store_true")
+    au.add_argument("--ponovo", action="store_true")
+    au.add_argument("--kampanja", default="")
     rq = sub.add_parser("requeue")
     rq.add_argument("--issues", default="")
     a = p.parse_args()
@@ -979,7 +986,7 @@ def main() -> None:
     elif a.cmd == "probe":
         cmd_probe(a.kampanja or None)
     elif a.cmd == "auto":
-        cmd_auto(a.dry)
+        cmd_auto(a.dry, a.ponovo, a.kampanja or None)
     elif a.cmd == "requeue":
         cmd_requeue([int(x) for x in re.split(r"[,\s]+", a.issues) if x.strip()])
     else:

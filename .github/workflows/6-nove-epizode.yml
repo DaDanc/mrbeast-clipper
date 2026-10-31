@@ -10,6 +10,13 @@ on:
         description: "Samo ispiši što ima u mapi, ne radi klipove"
         type: boolean
         default: true
+      jos_klipova:
+        description: "Napravi još klipova i iz već obrađenih epizoda"
+        type: boolean
+        default: false
+      kampanja:
+        description: "Samo ova kampanja (npr. joy101). Prazno = sve"
+        default: ""
 
 permissions:
   contents: read
@@ -59,4 +66,6 @@ jobs:
       - name: Provjeri mapu i napravi klipove iz novih epizoda
         env:
           DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.samo_provjeri && '--dry' || '' }}
-        run: python -m clipper.main auto $DRY
+          JOS: ${{ github.event_name == 'workflow_dispatch' && inputs.jos_klipova && '--ponovo' || '' }}
+          KAMP: ${{ inputs.kampanja }}
+        run: python -m clipper.main auto $DRY $JOS --kampanja "$KAMP"
