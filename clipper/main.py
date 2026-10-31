@@ -482,8 +482,8 @@ def cmd_daily() -> None:
             print("Nema provjerenih neobjavljenih klipova.")
             return
         tracker = tracker_issue()
-        comment(tracker, f"{owner_mention()}⚠️ **Ponestalo je klipova.** Sutra nema objava dok ne pokreneš "
-                         "**1. Napravi klipove** s materijalom nove (ili iste) kampanje.")
+        comment(tracker, f"{owner_mention()}⚠️ **Ponestalo je klipova** – nakon onih u Bufferu nema više objava. "
+                         "Napiši Claudeu **\"još klipova\"** ili ubaci novu kampanju.")
         print("Nema neobjavljenih klipova – poslana obavijest.")
         return
 
@@ -498,10 +498,14 @@ def cmd_daily() -> None:
             print(f"::error::#{num} nije objavljen: {e!r} | " + " / ".join(x.strip() for x in tb))
 
     left = len(cands) - min(need, len(cands))
-    if left < want and warn_now:
+    per_day = max(len(CFG.get("post_times") or []), 1)
+    total = waiting + min(need, len(cands)) + left
+    days = total / per_day
+    if days <= float(CFG.get("upozori_dana", 2)) and warn_now:
         tracker = tracker_issue()
-        comment(tracker, f"{owner_mention()}ℹ️ Ostalo je još samo **{left}** neobjavljenih klipova. "
-                         "Uskoro pokreni **1. Napravi klipove** da objave ne stanu.")
+        comment(tracker, f"{owner_mention()}⏰ **Klipova ima još za ~{days:.0f} dan(a)** "
+                         f"({total} ukupno: u Bufferu i u redu). Napiši Claudeu **\"još klipova\"** "
+                         "ili ubaci novu kampanju, da objave ne stanu.")
 
 
 # ---------------------------------------------------------------- reschedule

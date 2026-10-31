@@ -153,6 +153,8 @@ post_times:
 # uzimajući najbolje neobjavljene klipove. 9 = 3 dana unaprijed.
 # Buffer besplatno dopušta najviše 10 zakazanih objava po kanalu.
 daily_posts: 9
+# Obavijest (17 h) kad klipova ostane za ovoliko dana ili manje.
+upozori_dana: 2
 
 # Obavijest na mobitel za SVAKU objavu (false = samo zapis u "Linkovi za Vyro", bez obavijesti).
 # Ugašeno: s jednom Vyro predajom bitne su samo obavijesti o pregledima ispod.
