@@ -197,6 +197,14 @@ preskoci:
   - 60   # Phony: grub razgovor o seksu – rizik za Disney brand safety
   - 64   # Phony: isti dijelovi kao #62 i #72 (recap) – ponavljanje
   - 65   # Phony: slab i nejasan bez konteksta
+  - 80   # Harry: zbrkan početak, završava usred pitanja
+  - 82   # Taylor: Whisper krivo čuo (Warner "Travel"), zbrkano oko novca
+  - 83   # Taylor: titlovi pišu "Taylor Dane" i krivo ime Richie Cannata, zbrkano
+  - 86   # Seth: ne odgovara naslovu, završava Hodinim pitanjem o drugoj temi
+  - 87   # Seth: Whisper "tailoring" umjesto table read, završava usred rečenice
+  - 88   # Seth: titlovi pišu "Lauren" umjesto Lorne (ključno ime)
+  - 89   # Seth: titlovi pišu "Lauren" umjesto Lorne (glavna tema klipa)
+  - 90   # Seth: počinje usred misli, nejasno o kojim emisijama govori
 
 # Klipovi čiji se trenutak smije izrezati ponovo (npr. loš render).
 napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29, 58]
@@ -243,6 +251,13 @@ opisi:
   76: A 'dead body party' on a weeknight? He's suddenly very interested 👀
   61: She says she's angry. He says she's terrified of losing control of him
   70: Connie Britton gets emotional talking about the reason she became a principal
+  85: "Seth Meyers snuck home after a party and his dad caught him with one word: 'Liar' 😂"
+  79: "Harry Connick Jr. heard his late mom's voice backstage at Carnegie Hall and almost couldn't go on"
+  81: "Taylor Dayne was writing down 'I'm gonna be famous by this age' long before anyone knew her name"
+  91: "Seth Meyers says reading is the one hobby nobody respects 📚"
+  77: "Harry Connick Jr.'s mom said on tape she wanted him to play Carnegie Hall. Then he did"
+  84: "Within a year Taylor Dayne went from singing in clubs to opening for Michael Jackson's Bad tour"
+  78: "Harry Connick Jr. learned piano as a little kid jamming with New Orleans legends who never told him the key 🎹"
 
 # Hook naslov velikim slovima na vrhu videa (iznad slike), cijelo vrijeme klipa.
 # Piše ga Claude nakon provjere; dodaje se na video prije prve objave.
@@ -265,6 +280,13 @@ naslovi:
   35: "His mom eloped in Morocco"
   45: "The record that made Taylor Dayne a star"
   57: "What Seth Meyers is like at the gym"
+  85: "His dad caught him sneaking home with one word"
+  79: "He heard his mom's voice before walking on stage"
+  81: "She wrote down her fame goals as a kid"
+  91: "The one hobby nobody respects"
+  77: "His mom predicted this on tape"
+  84: "From clubs to opening for Michael Jackson"
+  78: "Learning piano with no one telling him the key"
 
 # Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
 hype_words:
