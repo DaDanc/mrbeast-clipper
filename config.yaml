@@ -144,9 +144,9 @@ timezone: Europe/Zagreb
 # pauza_do: ""
 # prozor_objava: ["14:00", "04:00"]
 post_times:
-  - "18:00"
-  - "20:30"
-  - "23:00"
+  - "15:00"
+  - "17:30"
+  - "20:00"
 
 # Dnevno punjenje (workflow "5. Dnevne objave", svaki dan u 17:00):
 # drži u Bufferu ovoliko objava na čekanju (po 3 dnevno u post_times terminima),
