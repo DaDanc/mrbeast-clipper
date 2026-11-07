@@ -205,6 +205,15 @@ preskoci:
   - 88   # Seth: titlovi pišu "Lauren" umjesto Lorne (ključno ime)
   - 89   # Seth: titlovi pišu "Lauren" umjesto Lorne (glavna tema klipa)
   - 90   # Seth: počinje usred misli, nejasno o kojim emisijama govori
+  - 96   # Taylor: počinje usred rečenice, "rageaholic" otac – osjetljivo
+  - 97   # Taylor: samo Hoda (uvod u meditaciju), nema gosta
+  - 98   # Taylor: smrt oca i svađa s majkom – osjetljivo, rizik izvan konteksta
+  - 100  # Taylor: zbrkan početak, titlovi pišu "Taylor Dane"
+  - 101  # Taylor: titlovi pišu "Deborah Messing" (ključno ime u poanti)
+  - 102  # Taylor: zbrkano o Vegasu, krivo prepoznata imena
+  - 103  # Taylor: nabrajanje vježbi, nema priče
+  - 104  # Taylor: počinje usred misli, završava usred rečenice
+  - 105  # Taylor: Hoda i reklama za tapping vježbu, nema gosta
 
 # Klipovi čiji se trenutak smije izrezati ponovo (npr. loš render).
 napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29, 58]
@@ -258,6 +267,9 @@ opisi:
   77: "Harry Connick Jr.'s mom said on tape she wanted him to play Carnegie Hall. Then he did"
   84: "Within a year Taylor Dayne went from singing in clubs to opening for Michael Jackson's Bad tour"
   78: "Harry Connick Jr. learned piano as a little kid jamming with New Orleans legends who never told him the key 🎹"
+  93: "Harry Connick Jr.'s daughter Georgia told him the book wasn't about him. It was about his mom ❤️"
+  99: "Taylor Dayne has never been married. She says she learned about love from watching her parents"
+  92: "Harry Connick Jr. compares himself to the little drummer boy: no pressure, just giving what he's got 🥁"
 
 # Hook naslov velikim slovima na vrhu videa (iznad slike), cijelo vrijeme klipa.
 # Piše ga Claude nakon provjere; dodaje se na video prije prve objave.
@@ -287,6 +299,9 @@ naslovi:
   77: "His mom predicted this on tape"
   84: "From clubs to opening for Michael Jackson"
   78: "Learning piano with no one telling him the key"
+  93: "What his daughter told him about his mom"
+  99: "How she learned to love"
+  92: "Why he felt zero pressure"
 
 # Riječi koje znače "uzbudljiv trenutak" - klip s njima dobiva više bodova.
 hype_words:
