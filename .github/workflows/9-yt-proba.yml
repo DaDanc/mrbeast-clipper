@@ -1,0 +1,39 @@
+name: 9. Proba YouTube skidanja
+
+on:
+  workflow_dispatch:
+    inputs:
+      video:
+        description: "YouTube link za probu"
+        default: "https://www.youtube.com/watch?v=0e3GPea1Tyg"
+
+permissions:
+  contents: read
+
+jobs:
+  proba:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Instaliraj yt-dlp + deno
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -U --pre "yt-dlp[default]"
+          curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null
+          echo "$HOME/.deno/bin" >> $GITHUB_PATH
+      - name: Popis najgledanijih (kanal)
+        continue-on-error: true
+        run: |
+          yt-dlp --flat-playlist --playlist-items 1:30 --print "%(view_count)s %(id)s %(title)s" \
+            "https://www.youtube.com/@MrBeast/videos" | sort -nr | head -10
+      - name: Skini 60 s (default)
+        continue-on-error: true
+        env: { V: "${{ inputs.video }}" }
+        run: |
+          yt-dlp -f "bv*[height<=1080]+ba/b" --download-sections "*60-120" -o t1.%(ext)s "$V" && ls -la t1.* && echo "::notice::DEFAULT RADI"
+      - name: Skini 60 s (tv klijent)
+        continue-on-error: true
+        env: { V: "${{ inputs.video }}" }
+        run: |
+          yt-dlp --extractor-args "youtube:player_client=tv,web_safari" -f "bv*[height<=1080]+ba/b" \
+            --download-sections "*60-120" -o t2.%(ext)s "$V" && ls -la t2.* && echo "::notice::TV KLIJENT RADI"
