@@ -39,6 +39,11 @@ def default_campaign() -> str:
     return str(BASE_CFG.get("zadana_kampanja") or next(iter(BASE_CFG.get("kampanje") or {"": 0})))
 
 
+def clip_campaign(d: dict | None) -> str:
+    """Kampanja klipa; stari klipovi bez oznake pripadaju config "kampanja_bez_oznake"."""
+    return (d or {}).get("kampanja") or str(BASE_CFG.get("kampanja_bez_oznake") or default_campaign())
+
+
 def campaign_cfg(key: str | None) -> dict:
     c = dict(BASE_CFG)
     key = key or default_campaign()
@@ -325,7 +330,7 @@ def _local(dt) -> str:
 def cmd_publish(issue: int, at: str = "") -> None:
     info = json.loads(gh("issue", "view", str(issue), "--json", "body"))
     d = read_json_marker(info.get("body") or "", "CLIPDATA") or {}
-    with use_campaign(d.get("kampanja")):
+    with use_campaign(clip_campaign(d)):
         _publish(issue, at)
 
 
@@ -464,8 +469,13 @@ def cmd_daily() -> None:
         if CFG.get("samo_provjereni") and i["number"] not in reviewed and not (d and d.get("ai")):
             continue
         # samo klipovi kampanja koje još traju (stari klipovi bez oznake = zadana kampanja)
-        if d and not campaign_active(d.get("kampanja") or (
-                default_campaign() if (not tags or tags in d.get("caption", "")) else "__stara__")):
+        camp = clip_campaign(d) if ((d or {}).get("kampanja") or not tags
+                                    or tags in (d or {}).get("caption", "")) else "__stara__"
+        if d and not campaign_active(camp):
+            continue
+        # config "objavljuj_kampanje": ako je zadano, objavljuju se samo klipovi tih kampanja
+        only_c = CFG.get("objavljuj_kampanje") or []
+        if d and only_c and camp not in only_c:
             continue
         if d:
             cands.append((float(d.get("score", 0)), i["number"], i["title"]))
@@ -483,7 +493,7 @@ def cmd_daily() -> None:
             return
         tracker = tracker_issue()
         comment(tracker, f"{owner_mention()}⚠️ **Ponestalo je klipova** – nakon onih u Bufferu nema više objava. "
-                         "Napiši Claudeu **\"još klipova\"** ili ubaci novu kampanju.")
+                         + _refill_hint())
         print("Nema neobjavljenih klipova – poslana obavijest.")
         return
 
@@ -504,8 +514,53 @@ def cmd_daily() -> None:
     if days <= float(CFG.get("upozori_dana", 2)) and warn_now:
         tracker = tracker_issue()
         comment(tracker, f"{owner_mention()}⏰ **Klipova ima još za ~{days:.0f} dan(a)** "
-                         f"({total} ukupno: u Bufferu i u redu). Napiši Claudeu **\"još klipova\"** "
-                         "ili ubaci novu kampanju, da objave ne stanu.")
+                         f"({total} ukupno: u Bufferu i u redu). " + _refill_hint())
+
+
+def _yt_campaigns() -> list[str]:
+    return [k for k, v in (BASE_CFG.get("kampanje") or {}).items()
+            if (v or {}).get("youtube_kanal") and campaign_active(k)]
+
+
+def _refill_hint() -> str:
+    if _yt_campaigns():
+        return ("Nove MrBeast videe skida **tvoje računalo** (svaki dan oko 17 h) – "
+                "ako je bilo ugašeno, samo ga upali i klipovi se rade sami.")
+    return 'Napiši Claudeu **"još klipova"** ili ubaci novu kampanju, da objave ne stanu.'
+
+
+# ---------------------------------------------------------------- YouTube plan
+def cmd_ytplan(kampanja: str, force: int = 0) -> None:
+    """Za YouTube kampanju (MrBeast): treba li skinuti nove videe i koje već imamo.
+    Ispisuje u GITHUB_OUTPUT: broj (koliko videa skinuti), koristeni (ID-evi), kanal."""
+    key = kampanja or (_yt_campaigns() or [default_campaign()])[0]
+    c = campaign_cfg(key)
+    used_ids = sorted({n[:11] for n in used_ranges() if re.match(r"^[\w-]{11}_", n)})
+    skip = {int(x) for x in (BASE_CFG.get("preskoci") or [])}
+    stock = 0
+    try:
+        issues = json.loads(gh("issue", "list", "--state", "open", "--label", L_CLIP, "--limit", "300",
+                               "--json", "number,body,labels"))
+    except Exception:
+        issues = []
+    for i in issues:
+        names = {l["name"] for l in i["labels"]}
+        d = read_json_marker(i.get("body") or "", "CLIPDATA") or {}
+        if L_POSTED in names or i["number"] in skip or d.get("kampanja") != key:
+            continue
+        if d.get("ai") or i["number"] in {int(x) for x in (BASE_CFG.get("opisi") or {})}:
+            stock += 1
+    want = int(c.get("zaliha_klipova", 15))
+    per_video = max(int(c.get("auto_klipova", c.get("clips_per_video", 8))), 1)
+    n = force or (0 if stock >= want else min(int(c.get("max_videa_dnevno", 2)),
+                                                -(-(want - stock) // per_video)))
+    print(f"::notice::{key}: na zalihi {stock} klipova (cilj {want}) → skidam {n} novih videa. "
+          f"Već iskorišteno {len(used_ids)} videa.")
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a", encoding="utf-8") as f:
+            f.write(f"broj={n}\nkoristeni={','.join(used_ids)}\nkanal={c['youtube_kanal']}\n"
+                    f"min_trajanje={int(c.get('min_minuta_videa', 8)) * 60}\nkampanja={key}\n")
 
 
 # ---------------------------------------------------------------- reschedule
@@ -690,7 +745,7 @@ def cmd_rerender(only: list[int] | None = None) -> None:
             continue
         if not only and n not in reviewed and not d.get("ai"):
             continue
-        camp = d.get("kampanja") or default_campaign()
+        camp = clip_campaign(d)
         if not campaign_active(camp):
             continue
         groups.setdefault((camp, d["source"]), []).append((i, d))
@@ -970,6 +1025,9 @@ def main() -> None:
     au.add_argument("--dry", action="store_true")
     au.add_argument("--ponovo", action="store_true")
     au.add_argument("--kampanja", default="")
+    yp = sub.add_parser("ytplan")
+    yp.add_argument("--kampanja", default="")
+    yp.add_argument("--broj", type=int, default=0)
     rq = sub.add_parser("requeue")
     rq.add_argument("--issues", default="")
     a = p.parse_args()
@@ -991,6 +1049,8 @@ def main() -> None:
         cmd_probe(a.kampanja or None)
     elif a.cmd == "auto":
         cmd_auto(a.dry, a.ponovo, a.kampanja or None)
+    elif a.cmd == "ytplan":
+        cmd_ytplan(a.kampanja, a.broj)
     elif a.cmd == "requeue":
         cmd_requeue([int(x) for x in re.split(r"[,\s]+", a.issues) if x.strip()])
     else:

@@ -5,6 +5,7 @@ Podržano:
   - Dropbox link
   - direktan link na .mp4/.mov
   - YouTube link (preko yt-dlp; s GitHub servera ovo često ne radi jer YouTube blokira)
+  - lokalna datoteka ili mapa (npr. MrBeast videi koje je skinulo tvoje računalo)
 """
 from __future__ import annotations
 
@@ -48,6 +49,13 @@ def _download_direct(url: str, out_dir: Path) -> Path:
 def fetch(url: str, out_dir: Path, max_videos: int = 1) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     url = url.strip()
+
+    local = Path(url)
+    if local.exists():  # već skinuto (npr. artefakt s tvog računala)
+        vids = [local] if local.is_file() else _largest_videos(local, max_videos)
+        if not vids:
+            raise RuntimeError(f"U {url} nema videa.")
+        return vids
 
     if "drive.google.com" in url or "docs.google.com" in url:
         import gdown

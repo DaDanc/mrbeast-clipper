@@ -11,11 +11,44 @@
 #   preskoci_datoteke = datoteke iz mape koje se ne koriste (gotovi klipovi koje svi objavljuju)
 #   kraj              = zadnji dan kampanje (nakon toga se njezini klipovi ne objavljuju)
 #   jedna_platforma   = isti video ne smije na više računa → svaki klip ide na jednu mrežu
-zadana_kampanja: joy101
+zadana_kampanja: mrbeast
+kampanja_bez_oznake: joy101   # stari klipovi (prije profila kampanja) su iz Joy 101
 min_minuta_epizode: 10
 auto_klipova: 10
 
+# Objavljuju se SAMO klipovi ovih kampanja (prazno = sve aktivne).
+# 08.11.: profil se gradi na MrBeast klipovima (bez zarade); Joy 101 / Phony se više ne objavljuju,
+# osim onih koji su već zakazani u Bufferu.
+objavljuj_kampanje: [mrbeast]
+
 kampanje:
+  mrbeast:
+    naziv: "MrBeast (bez kampanje – rast profila)"
+    # Videe skida TVOJE računalo (YouTube blokira GitHub servere), workflow "9. MrBeast".
+    youtube_kanal: "https://www.youtube.com/@MrBeast/videos"
+    min_minuta_videa: 8        # preskoči kratke videe
+    zaliha_klipova: 15         # kad neobjavljenih padne ispod ovoga, skine se novi video
+    max_videa_dnevno: 2
+    auto_klipova: 8
+    min_seconds: 25
+    max_seconds: 58
+    hashtags: "#mrbeast #mrbeastclips #challenge #fyp"
+    caption_template: |
+      {hook}
+
+      🎥 MrBeast {hashtags}
+    platforms: [tiktok, instagram]
+    brief: |
+      Source: a MrBeast YouTube video (big-budget challenges, giveaways, extreme stunts).
+      - Pick the most gripping moments: huge stakes, money reveals, eliminations, twists,
+        shocked reactions, funny banter between Jimmy and the crew (Karl, Chandler, Nolan, Tareq).
+      - The clip must make sense on its own: the viewer must understand the challenge/stakes
+        within the first 3 seconds, and it must end on a payoff (reveal, win, reaction), not mid-sentence.
+      - SKIP sponsor reads and ads (Feastables, Lunchly, apps, games), the intro and the outro.
+      - Do not misrepresent what happened. Hooks must be true to the clip.
+    hype_words: [million, dollars, "$", win, won, eliminated, last, survive, insane, crazy,
+                 "oh my god", "no way", prize, money, keep, challenge, lose, island, car, house]
+
   joy101:
     naziv: "Joy 101"
     kraj: "2026-11-10"
