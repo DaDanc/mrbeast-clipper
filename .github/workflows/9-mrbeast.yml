@@ -19,7 +19,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: make-clips
+  group: mrbeast
   cancel-in-progress: false
 
 jobs:
