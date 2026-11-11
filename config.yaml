@@ -19,7 +19,8 @@ auto_klipova: 10
 # Objavljuju se SAMO klipovi ovih kampanja (prazno = sve aktivne).
 # 08.11.: profil se gradi na MrBeast klipovima (bez zarade); Joy 101 / Phony se više ne objavljuju,
 # osim onih koji su već zakazani u Bufferu.
-objavljuj_kampanje: [mrbeast]
+# 11.11.: Joy 101 / Phony gotovi. Klipaju se najbolji momenti iz MrBeast i Financial Audit videa (izmjenjuju se).
+objavljuj_kampanje: [mrbeast, financial_audit]
 
 kampanje:
   mrbeast:
@@ -48,6 +49,40 @@ kampanje:
       - Do not misrepresent what happened. Hooks must be true to the clip.
     hype_words: [million, dollars, "$", win, won, eliminated, last, survive, insane, crazy,
                  "oh my god", "no way", prize, money, keep, challenge, lose, island, car, house]
+
+  financial_audit:
+    naziv: "Financial Audit (Caleb Hammer) – rast profila"
+    youtube_kanal: "https://www.youtube.com/@calebhammer/videos"
+    min_minuta_videa: 25       # samo cijele epizode, ne kratki videi
+    zaliha_klipova: 15
+    max_videa_dnevno: 1        # epizode traju 1-2 h, jedna daje dosta klipova
+    auto_klipova: 10
+    min_seconds: 25
+    max_seconds: 58
+    hashtags: "#financialaudit #calebhammer #money #debt #fyp"
+    caption_template: |
+      {hook}
+
+      🎥 Financial Audit {hashtags}
+    platforms: [tiktok, instagram]
+    brief: |
+      Source: a Financial Audit episode (Caleb Hammer reviews a guest's income, debt and spending,
+      often bluntly and with a lot of humor).
+      - Pick the most gripping moments: shocking spending reveals (DoorDash, car loans, credit card
+        debt, "how much?!"), Caleb's brutal one-liners and reactions, the guest's excuses, and
+        moments where the math finally hits the guest.
+      - The viewer must understand the situation (income / debt / what they bought) within the
+        first 3 seconds, and the clip must end on a payoff (reaction, punchline, realization),
+        not mid-sentence.
+      - SKIP sponsor reads and ads (Chime, Kikoff, PDS Debt, DollarWise app, memberships), the
+        intro and the outro.
+      - SKIP moments about abuse, self-harm, serious illness, death or anything that would
+        humiliate the guest beyond their spending choices. No personal data on screen beyond
+        what is already in the episode.
+      - Do not misrepresent what happened or what numbers were said. Hooks must be true to the clip.
+    hype_words: [debt, "credit card", doordash, uber, loan, car, "how much", thousand, dollars, "$",
+                 broke, budget, salary, income, rent, spent, spending, interest, "oh my god", "no way",
+                 insane, crazy, why, stupid, bankrupt, savings, "make a month"]
 
   joy101:
     naziv: "Joy 101"

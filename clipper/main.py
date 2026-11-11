@@ -524,32 +524,48 @@ def _yt_campaigns() -> list[str]:
 
 def _refill_hint() -> str:
     if _yt_campaigns():
-        return ("Nove MrBeast videe skida **tvoje računalo** (svaki dan oko 17 h) – "
+        return ("Nove videe (MrBeast / Financial Audit) skida **tvoje računalo** (svaki dan oko 17 h) – "
                 "ako je bilo ugašeno, samo ga upali i klipovi se rade sami.")
     return 'Napiši Claudeu **"još klipova"** ili ubaci novu kampanju, da objave ne stanu.'
 
 
 # ---------------------------------------------------------------- YouTube plan
-def cmd_ytplan(kampanja: str, force: int = 0) -> None:
-    """Za YouTube kampanju (MrBeast): treba li skinuti nove videe i koje već imamo.
-    Ispisuje u GITHUB_OUTPUT: broj (koliko videa skinuti), koristeni (ID-evi), kanal."""
-    key = kampanja or (_yt_campaigns() or [default_campaign()])[0]
-    c = campaign_cfg(key)
-    used_ids = sorted({n[:11] for n in used_ranges() if re.match(r"^[\w-]{11}_", n)})
+def _yt_stock(key: str, issues: list[dict]) -> int:
     skip = {int(x) for x in (BASE_CFG.get("preskoci") or [])}
+    opisi = {int(x) for x in (BASE_CFG.get("opisi") or {})}
     stock = 0
-    try:
-        issues = json.loads(gh("issue", "list", "--state", "open", "--label", L_CLIP, "--limit", "300",
-                               "--json", "number,body,labels"))
-    except Exception:
-        issues = []
     for i in issues:
         names = {l["name"] for l in i["labels"]}
         d = read_json_marker(i.get("body") or "", "CLIPDATA") or {}
         if L_POSTED in names or i["number"] in skip or d.get("kampanja") != key:
             continue
-        if d.get("ai") or i["number"] in {int(x) for x in (BASE_CFG.get("opisi") or {})}:
+        if d.get("ai") or i["number"] in opisi:
             stock += 1
+    return stock
+
+
+def cmd_ytplan(kampanja: str, force: int = 0) -> None:
+    """Za YouTube kampanje (MrBeast, Financial Audit): treba li skinuti nove videe i koje već imamo.
+    Bez --kampanja bira kanal kojem je zaliha najmanja (izmjenjuju se).
+    Ispisuje u GITHUB_OUTPUT: broj (koliko videa skinuti), koristeni (ID-evi), kanal."""
+    used_ids = sorted({n[:11] for n in used_ranges() if re.match(r"^[\w-]{11}_", n)})
+    try:
+        issues = json.loads(gh("issue", "list", "--state", "open", "--label", L_CLIP, "--limit", "500",
+                               "--json", "number,body,labels"))
+    except Exception:
+        issues = []
+    only_c = BASE_CFG.get("objavljuj_kampanje") or []
+    kands = [k for k in _yt_campaigns() if not only_c or k in only_c] or [default_campaign()]
+    if kampanja:
+        key = kampanja
+    else:
+        def ratio(k: str) -> float:
+            return _yt_stock(k, issues) / max(int(campaign_cfg(k).get("zaliha_klipova", 15)), 1)
+        key = min(kands, key=ratio)
+        for k in kands:
+            print(f"::notice::{k}: na zalihi {_yt_stock(k, issues)} klipova")
+    c = campaign_cfg(key)
+    stock = _yt_stock(key, issues)
     want = int(c.get("zaliha_klipova", 15))
     per_video = max(int(c.get("auto_klipova", c.get("clips_per_video", 8))), 1)
     n = force or (0 if stock >= want else min(int(c.get("max_videa_dnevno", 2)),
