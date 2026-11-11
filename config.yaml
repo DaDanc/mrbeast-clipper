@@ -27,12 +27,18 @@ kampanje:
     naziv: "Behemoth! (Disney/Searchlight) – Phase 2"
     kraj: "2026-11-17"
     # Brief: klipati Pedro featurette (i Pedro spotove). 9x16 verzija i CUTDOWNS su gotovi rezovi – preskoči.
-    frameio_mapa: "https://next.frame.io/share/99f04c14-0969-43b3-84a4-12dcd927814b/4d2c40ff-78b6-472a-8a8e-85996a69c662"
-    preskoci_datoteke: "(?i)9x16|cutdowns"
-    min_minuta_epizode: 0      # featurette traje 2:55
-    auto_klipova: 4
-    min_seconds: 20            # brief: min 15 s, max 2 min
-    max_seconds: 58
+    # Pedro featurette, TV spot, digital spot, trailer 2. Gotovi vertikalni rezovi, cutdowni, bumper,
+    # slike i audio-split se preskaču.
+    frameio_mapa:
+      - "https://next.frame.io/share/99f04c14-0969-43b3-84a4-12dcd927814b/4d2c40ff-78b6-472a-8a8e-85996a69c662"
+      - "https://next.frame.io/share/99f04c14-0969-43b3-84a4-12dcd927814b/2d94dcab-11cc-4dd2-927e-ae30b29dfb54"
+      - "https://next.frame.io/share/99f04c14-0969-43b3-84a4-12dcd927814b/0074723e-95fe-4500-b2b2-248e11d1b49a"
+      - "https://next.frame.io/share/99f04c14-0969-43b3-84a4-12dcd927814b/f7bb526e-2204-458a-9d22-32933b69f9c3"
+    preskoci_datoteke: "(?i)9x16|1080x1920|4x5|cutdowns|bumper|audio-split|\\.jpe?g$|\\.png$"
+    min_minuta_epizode: 0
+    auto_klipova: 6
+    min_seconds: 15            # brief: min 15 s, max 2 min; kraći klipovi bolje prolaze
+    max_seconds: 32
     # Disney: AI alati ne smiju trenirati na unosu → nikad besplatni Gemini, samo Claude API (ili bez AI-a).
     ai_samo: anthropic
     # Obavezno u opisu: naslov filma + datum; hashtagovi SAMO ovi (brief zabranjuje ostale).
@@ -244,16 +250,17 @@ timezone: Europe/Zagreb
 # razmak_minuta: [60, 100]   # isključeno 30.10. – vraćeni fiksni termini (3 dnevno) jer je TikTok pao
 # pauza_do: ""
 # prozor_objava: ["14:00", "04:00"]
+# 11.11.: 2 dnevno (3 nisu prolazila), svaki dan ±8 min drugačije – kao da objavljuje čovjek.
 post_times:
-  - "15:00"
-  - "17:30"
   - "20:00"
+  - "22:00"
+pomak_minuta: 8
 
 # Dnevno punjenje (workflow "5. Dnevne objave", svaki dan u 17:00):
 # drži u Bufferu ovoliko objava na čekanju (po 3 dnevno u post_times terminima),
 # uzimajući najbolje neobjavljene klipove. 9 = 3 dana unaprijed.
 # Buffer besplatno dopušta najviše 10 zakazanih objava po kanalu.
-daily_posts: 9
+daily_posts: 6
 # Obavijest (17 h) kad klipova ostane za ovoliko dana ili manje.
 upozori_dana: 2
 
@@ -273,6 +280,8 @@ auto_publish: 0   # klipove prvo provjerava Claude prema briefu, zatim idu u Buf
 
 # Klipovi (brojevi Issuea) koji NISU prošli provjeru prema briefu – nikad se ne objavljuju.
 preskoci:
+  - 110  # Behemoth: predug (57 s) – featurette se reže ponovo na kraće klipove
+  - 111
   - 20   # Seth: počinje usred priče, nejasno o čemu se radi
   - 23   # Seth: počinje usred rečenice, Whisper krivo čuo – titlovi bi bili krivi
   - 18   # 18-29: stari render s lošim naslovom na videu – rade se ponovo
@@ -317,7 +326,7 @@ preskoci:
   - 105  # Taylor: Hoda i reklama za tapping vježbu, nema gosta
 
 # Klipovi čiji se trenutak smije izrezati ponovo (npr. loš render).
-napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29, 58]
+napravi_ponovo: [18, 19, 21, 22, 24, 25, 26, 27, 28, 29, 58, 110, 111]
 
 # Dnevne objave uzimaju SAMO provjerene klipove: one s opisom ispod
 # ili one koje je odabrao i ocijenio AI (🤖 u naslovu Issuea).
@@ -327,8 +336,6 @@ samo_provjereni: true
 # REDOSLIJED = redoslijed objavljivanja.
 # Obavezni tekst kampanje i hashtag se dodaju sami.
 opisi:
-  111: "Pedro Pascal had three months to learn the cello for this role. He practiced five to six hours a day 🎻"
-  110: "Pedro Pascal finds his perfect movie star role as a master cellist 🎻"
   52: Seth Meyers' parents just hit 56 years of marriage and he says they're basically a vaudeville act
   55: 'Seth Meyers'' daughter allows him exactly one thing at bedtime: a firm handshake 😂'
   31: Harry Connick Jr. refused to set foot inside Carnegie Hall for 45 years. The reason is his mom
@@ -377,8 +384,6 @@ opisi:
 # Hook naslov velikim slovima na vrhu videa (iznad slike), cijelo vrijeme klipa.
 # Piše ga Claude nakon provjere; dodaje se na video prije prve objave.
 naslovi:
-  111: "He learned the cello in 3 months for this role"
-  110: "Pedro Pascal's perfect movie star role"
   55: "His daughter only allows him a handshake at bedtime"
   31: "He waited 45 years to walk into Carnegie Hall"
   51: "People keep telling Seth Meyers he looks like Seth Meyers"

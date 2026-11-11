@@ -304,11 +304,14 @@ def next_slot(taken: list, rng=None) -> "datetime":
         return slot.replace(second=0, microsecond=0)
 
     times = sorted(CFG.get("post_times") or ["18:00", "20:30", "23:00"])
+    jit = int(CFG.get("pomak_minuta", 0) or 0)  # svaki dan malo drugačije vrijeme, kao da objavljuje čovjek
     for day in range(0, 60):
         d = (now + timedelta(days=day)).date()
         for t in times:
             hh, mm = (int(x) for x in t.split(":"))
             slot = datetime(d.year, d.month, d.day, hh, mm, tzinfo=tz)
+            if jit:  # isti dan + termin → uvijek isti pomak (da se ne "seli" između pokretanja)
+                slot += timedelta(minutes=random.Random(f"{d}-{t}").randint(-jit, jit))
             if slot < now:
                 continue
             if all(abs((slot - x).total_seconds()) >= 30 * 60 for x in taken):
@@ -676,6 +679,18 @@ def cmd_links() -> None:
 
 
 # ---------------------------------------------------------------- auto (nove epizode)
+def _frameio_videos(cfg_share, min_min: int, skip: str) -> list[dict]:
+    """frameio_mapa može biti jedan link ili popis linkova (više mapa iste kampanje)."""
+    from . import frameio
+    shares = cfg_share if isinstance(cfg_share, list) else [cfg_share]
+    out: list[dict] = []
+    for sh in shares:
+        sh = str(sh or "").strip()
+        if sh:
+            out += frameio.list_videos(sh, min_min, skip)
+    return out
+
+
 def cmd_auto(dry: bool = False, again: bool = False, only: str | None = None) -> None:
     """Za svaku aktivnu kampanju pogledaj njezinu Frame.io mapu i napravi klipove iz novih epizoda."""
     from . import frameio
@@ -689,12 +704,12 @@ def cmd_auto(dry: bool = False, again: bool = False, only: str | None = None) ->
             print(f"::notice::{key}: kampanja je završila, preskačem.")
             continue
         with use_campaign(key):
-            share = str(CFG.get("frameio_mapa") or "").strip()
+            share = CFG.get("frameio_mapa")
             if not share:
                 continue
             try:
-                vids = frameio.list_videos(share, int(CFG.get("min_minuta_epizode", 10)),
-                                           str(CFG.get("preskoci_datoteke") or ""))
+                vids = _frameio_videos(share, int(CFG.get("min_minuta_epizode", 10)),
+                                       str(CFG.get("preskoci_datoteke") or ""))
             except Exception as e:  # noqa: BLE001
                 print(f"::error::{key}: ne mogu pročitati Frame.io mapu ({e})")
                 continue
@@ -718,7 +733,7 @@ def cmd_probe(kampanja: str) -> None:
     """Ispiši audio/video tragove epizoda iz Frame.io mape (dijagnostika)."""
     from . import frameio
     with use_campaign(kampanja):
-        vids = frameio.list_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
+        vids = _frameio_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
                                    str(CFG.get("preskoci_datoteke") or ""))
     for v in vids[:1]:
         out = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
@@ -788,12 +803,12 @@ def _rerender_group(camp, source, items, links, layout, work) -> None:
     if True:
         with use_campaign(camp):
             if camp not in links:
-                vids = frameio.list_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
+                vids = _frameio_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
                                            str(CFG.get("preskoci_datoteke") or ""))
                 links[camp] = {norm(v["name"]): v["url"] for v in vids}
             url = links[camp].get(source)
             if not url:  # Frame.io zna ne dati sve linkove iz prve – pokušaj još jednom
-                vids = frameio.list_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
+                vids = _frameio_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
                                            str(CFG.get("preskoci_datoteke") or ""))
                 links[camp].update({norm(v["name"]): v["url"] for v in vids})
                 url = links[camp].get(source)
