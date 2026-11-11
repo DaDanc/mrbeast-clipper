@@ -260,7 +260,7 @@ pomak_minuta: 8
 # drži u Bufferu ovoliko objava na čekanju (po 3 dnevno u post_times terminima),
 # uzimajući najbolje neobjavljene klipove. 9 = 3 dana unaprijed.
 # Buffer besplatno dopušta najviše 10 zakazanih objava po kanalu.
-daily_posts: 6
+daily_posts: 10
 # Obavijest (17 h) kad klipova ostane za ovoliko dana ili manje.
 upozori_dana: 2
 
