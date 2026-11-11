@@ -327,6 +327,8 @@ samo_provjereni: true
 # REDOSLIJED = redoslijed objavljivanja.
 # Obavezni tekst kampanje i hashtag se dodaju sami.
 opisi:
+  111: "Pedro Pascal had three months to learn the cello for this role. He practiced five to six hours a day 🎻"
+  110: "Pedro Pascal finds his perfect movie star role as a master cellist 🎻"
   52: Seth Meyers' parents just hit 56 years of marriage and he says they're basically a vaudeville act
   55: 'Seth Meyers'' daughter allows him exactly one thing at bedtime: a firm handshake 😂'
   31: Harry Connick Jr. refused to set foot inside Carnegie Hall for 45 years. The reason is his mom
@@ -375,6 +377,8 @@ opisi:
 # Hook naslov velikim slovima na vrhu videa (iznad slike), cijelo vrijeme klipa.
 # Piše ga Claude nakon provjere; dodaje se na video prije prve objave.
 naslovi:
+  111: "He learned the cello in 3 months for this role"
+  110: "Pedro Pascal's perfect movie star role"
   55: "His daughter only allows him a handshake at bedtime"
   31: "He waited 45 years to walk into Carnegie Hall"
   51: "People keep telling Seth Meyers he looks like Seth Meyers"
