@@ -523,10 +523,9 @@ def _yt_campaigns() -> list[str]:
 
 
 def _refill_hint() -> str:
-    if _yt_campaigns():
-        return ("Nove videe (MrBeast / Financial Audit) skida **tvoje računalo** (svaki dan oko 17 h) – "
-                "ako je bilo ugašeno, samo ga upali i klipovi se rade sami.")
-    return 'Napiši Claudeu **"još klipova"** ili ubaci novu kampanju, da objave ne stanu.'
+    return ('Skini novi MrBeast / Financial Audit video (**SKINI.bat**), stavi ga na Google Drive '
+            '(javni link) i pošalji link Claudeu – ili ga sam ubaci u **"1. Napravi klipove"** '
+            '(kampanja: `mrbeast` ili `financial_audit`).')
 
 
 # ---------------------------------------------------------------- YouTube plan

@@ -6,8 +6,10 @@ name: 9. MrBeast + Financial Audit (skida tvoje računalo)
 # Ako je računalo ugašeno, posao čeka (do 24 h) i krene čim ga upališ.
 
 on:
-  schedule:
-    - cron: "10 16 * * *"
+  # 11.11.: isključeno – Emanuel ne želi da mu računalo radi. Videe sam skine, stavi na Google Drive
+  # i link ide u "1. Napravi klipove" (kampanja: mrbeast ili financial_audit).
+  # schedule:
+  #   - cron: "10 16 * * *"
   workflow_dispatch:
     inputs:
       broj_videa:
