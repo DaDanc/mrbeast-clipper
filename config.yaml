@@ -11,7 +11,7 @@
 #   preskoci_datoteke = datoteke iz mape koje se ne koriste (gotovi klipovi koje svi objavljuju)
 #   kraj              = zadnji dan kampanje (nakon toga se njezini klipovi ne objavljuju)
 #   jedna_platforma   = isti video ne smije na više računa → svaki klip ide na jednu mrežu
-zadana_kampanja: mrbeast
+zadana_kampanja: behemoth
 kampanja_bez_oznake: joy101   # stari klipovi (prije profila kampanja) su iz Joy 101
 min_minuta_epizode: 10
 auto_klipova: 10
@@ -19,10 +19,43 @@ auto_klipova: 10
 # Objavljuju se SAMO klipovi ovih kampanja (prazno = sve aktivne).
 # 08.11.: profil se gradi na MrBeast klipovima (bez zarade); Joy 101 / Phony se više ne objavljuju,
 # osim onih koji su već zakazani u Bufferu.
-# 11.11.: Joy 101 / Phony gotovi. Klipaju se najbolji momenti iz MrBeast i Financial Audit videa (izmjenjuju se).
-objavljuj_kampanje: [mrbeast, financial_audit]
+# 11.11.: Joy 101 / Phony gotovi. Emanuel ne želi skidati videe sam → samo Vyro kampanje s Frame.io materijalom.
+objavljuj_kampanje: [behemoth]
 
 kampanje:
+  behemoth:
+    naziv: "Behemoth! (Disney/Searchlight) – Phase 2"
+    kraj: "2026-11-17"
+    # Brief: klipati Pedro featurette (i Pedro spotove). 9x16 verzija i CUTDOWNS su gotovi rezovi – preskoči.
+    frameio_mapa: "https://next.frame.io/share/99f04c14-0969-43b3-84a4-12dcd927814b/4d2c40ff-78b6-472a-8a8e-85996a69c662"
+    preskoci_datoteke: "(?i)9x16|cutdowns"
+    min_minuta_epizode: 0      # featurette traje 2:55
+    auto_klipova: 4
+    min_seconds: 20            # brief: min 15 s, max 2 min
+    max_seconds: 58
+    # Disney: AI alati ne smiju trenirati na unosu → nikad besplatni Gemini, samo Claude API (ili bez AI-a).
+    ai_samo: anthropic
+    # Obavezno u opisu: naslov filma + datum; hashtagovi SAMO ovi (brief zabranjuje ostale).
+    hashtags: "#Behemoth #paidpartner"
+    caption_template: |
+      {hook}
+
+      Behemoth! In theaters December 4th. {hashtags}
+    # Nije spojen Instagram na Vyro → samo TikTok (i nema iste objave na dva računa).
+    platforms: [tiktok]
+    brief: |
+      Campaign: BEHEMOTH! (Searchlight/Disney), a film by Tony Gilroy starring Pedro Pascal,
+      Olivia Wilde, Eva Victor and Will Arnett. In theaters December 4th.
+      - Source is the official Pedro Pascal featurette. Spotlight Pedro Pascal's performance as a
+        cellist searching for his place in the world (he learned to play the cello for the role).
+      - Each clip must make sense on its own and end on a complete thought, not mid-sentence.
+      - Positive only. Nothing negative about Disney, Searchlight or the film. Do not invent plot
+        points, characters or storylines. Hooks must be true to the clip.
+      - Good hook angles (from the brief): "Pedro Pascal learned to play the cello for this role",
+        "Pedro Pascal finds his perfect movie star role", "The best performance of Pedro Pascal's career".
+    hype_words: [pedro, pascal, cello, music, musician, performance, role, behemoth, tony, gilroy,
+                 play, learned, character, beautiful, best]
+
   mrbeast:
     naziv: "MrBeast (bez kampanje – rast profila)"
     # Videe skida TVOJE računalo (YouTube blokira GitHub servere), workflow "9. MrBeast".

@@ -181,13 +181,13 @@ def _make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> No
         if used:
             print(f"  Preskačem {len(used)} već iskorištenih momenata iz ovog videa.", flush=True)
         clips = []
-        if CFG.get("ai_izbor", True) and ai.available():
+        if CFG.get("ai_izbor", True) and ai.available(CFG):
             try:
                 clips = ai.pick_clips(segs, n_clips, CFG["min_seconds"], CFG["max_seconds"], CFG, exclude=used)
             except Exception as e:
                 print(f"  ⚠️ AI odabir nije uspio ({e}) – biram po starom.", flush=True)
         elif CFG.get("ai_izbor", True):
-            print("  ℹ️ Nema AI ključa (GEMINI_API_KEY) – biram po glasnoći i ključnim riječima.", flush=True)
+            print("  ℹ️ Nema dopuštenog AI ključa – biram po glasnoći i ključnim riječima.", flush=True)
         if not clips:
             clips = highlights.find_clips(
                 segs, loud, CFG["hype_words"], n_clips, CFG["min_seconds"], CFG["max_seconds"], exclude=used

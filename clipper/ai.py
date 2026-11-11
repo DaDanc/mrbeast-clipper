@@ -21,7 +21,11 @@ import requests
 from .transcribe import Segment
 
 
-def provider() -> str | None:
+def provider(cfg: dict | None = None) -> str | None:
+    # ai_samo: anthropic = kampanja (npr. Disney) zabranjuje AI alate koji treniraju na unosu
+    # (besplatni Gemini to radi) → samo Claude API ili ništa.
+    if cfg and str(cfg.get("ai_samo") or "").lower() == "anthropic":
+        return "anthropic" if os.environ.get("ANTHROPIC_API_KEY", "").strip() else None
     if os.environ.get("GEMINI_API_KEY", "").strip():
         return "gemini"
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
@@ -29,8 +33,8 @@ def provider() -> str | None:
     return None
 
 
-def available() -> bool:
-    return provider() is not None
+def available(cfg: dict | None = None) -> bool:
+    return provider(cfg) is not None
 
 
 # ---------------------------------------------------------------- pozivi API-ja
@@ -96,7 +100,7 @@ def _ask_anthropic(prompt: str, model: str) -> str:
 
 
 def ask(prompt: str, cfg: dict) -> str:
-    p = provider()
+    p = provider(cfg)
     if p == "gemini":
         models = cfg.get("ai_gemini_modeli") or ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
         return _ask_gemini(prompt, list(models))
@@ -212,7 +216,7 @@ def pick_clips(segs: list[Segment], n: int, min_s: float, max_s: float, cfg: dic
                exclude: list[tuple[float, float]] | None = None) -> list:
     exclude = exclude or []
     segs = [s for s in segs if s.text]
-    print(f"▶ AI ({provider()}) bira momente iz {len(segs)} rečenica...", flush=True)
+    print(f"▶ AI ({provider(cfg)}) bira momente iz {len(segs)} rečenica...", flush=True)
     raw = parse_json(ask(build_prompt(segs, n, min_s, max_s, cfg, exclude), cfg))
     clips = validate(raw, segs, n, min_s, max_s, float(cfg.get("ai_min_ocjena", 7)), exclude)
     print(f"  AI je odabrao {len(clips)} klipova.", flush=True)
