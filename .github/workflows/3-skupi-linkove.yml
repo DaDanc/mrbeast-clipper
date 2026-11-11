@@ -2,7 +2,7 @@ name: 3. Skupi linkove za Vyro
 
 on:
   schedule:
-    - cron: "*/15 * * * *" # svakih 15 min (objave su u nasumična vremena)
+    - cron: "15 */4 * * *"  # svaka 4 sata (11.11.: svakih 15 min je potrošilo Buffer API limit)
   workflow_dispatch:
 
 permissions:
