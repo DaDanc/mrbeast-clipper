@@ -288,7 +288,9 @@ timezone: Europe/Zagreb
 # pauza_do: ""
 # prozor_objava: ["14:00", "04:00"]
 # 11.11.: 2 dnevno (3 nisu prolazila), svaki dan ±8 min drugačije – kao da objavljuje čovjek.
+# 18.11.: dodan treći termin u 14:00 (Scrubs).
 post_times:
+  - "14:00"
   - "20:00"
   - "22:00"
 pomak_minuta: 8
