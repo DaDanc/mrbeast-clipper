@@ -317,6 +317,9 @@ auto_publish: 0   # klipove prvo provjerava Claude prema briefu, zatim idu u Buf
 
 # Klipovi (brojevi Issuea) koji NISU prošli provjeru prema briefu – nikad se ne objavljuju.
 preskoci:
+  - 125  # Scrubs: emotivan (Mrs. Croft) – kampanja je samo za smiješne klipove
+  - 130  # Scrubs: emotivan (J.D. i Elliot) – samo smiješni
+  - 132  # Scrubs: dramatičan code blue – samo smiješni
   - 110  # Behemoth: predug (57 s) – featurette se reže ponovo na kraće klipove
   - 111
   - 113  # Behemoth: počinje usred rečenice, bez konteksta
@@ -374,6 +377,20 @@ samo_provjereni: true
 # REDOSLIJED = redoslijed objavljivanja.
 # Obavezni tekst kampanje i hashtag se dodaju sami.
 opisi:
+  # Scrubs (gotovi klipovi, samo smiješni – brief). Redoslijed = redoslijed objava.
+  128: "Dr. Cox tries to smile and Turk is genuinely scared 😂"
+  133: "Big Cox and Lil D are BACK 😂"
+  134: "'Nobody cares, J.D.' 😂"
+  129: "Turk's stress has a name: Raymond. And he sounds like Aaron Neville 😂"
+  127: "J.D. said he'd buy the drinks… he meant only the interns 😂"
+  123: "J.D. promised one night with no hospital talk. It lasted 10 seconds 😂"
+  136: "15 years later, J.D. and Turk finally pull their prank on Hooch 😂"
+  121: "Like many nepo babies, the new Janitor can't live up to his dad 😂"
+  135: "Dr. Cox's first-night pep talk was… not what J.D. remembered 😂"
+  126: "Dr. Cox pointing at J.D.'s heart went very wrong 😂"
+  124: "Halloween in a hospital: real injury or costume? 😂"
+  131: "Turk's prayer in the chapel did NOT go as planned 😂"
+  122: "When the breakup story is the craziest thing you've ever seen 😂"
   115: "Pedro Pascal practiced the cello five to six hours a day for this role 🎻"
   112: "Pedro Pascal admits learning the cello scared him. You'd never know it 🎻"
   116: "Pedro Pascal on what it actually feels like to play the cello"
