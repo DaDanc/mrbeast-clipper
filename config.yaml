@@ -11,7 +11,7 @@
 #   preskoci_datoteke = datoteke iz mape koje se ne koriste (gotovi klipovi koje svi objavljuju)
 #   kraj              = zadnji dan kampanje (nakon toga se njezini klipovi ne objavljuju)
 #   jedna_platforma   = isti video ne smije na više računa → svaki klip ide na jednu mrežu
-zadana_kampanja: behemoth
+zadana_kampanja: scrubs
 kampanja_bez_oznake: joy101   # stari klipovi (prije profila kampanja) su iz Joy 101
 min_minuta_epizode: 10
 auto_klipova: 10
@@ -20,7 +20,8 @@ auto_klipova: 10
 # 08.11.: profil se gradi na MrBeast klipovima (bez zarade); Joy 101 / Phony se više ne objavljuju,
 # osim onih koji su već zakazani u Bufferu.
 # 11.11.: Joy 101 / Phony gotovi. Emanuel ne želi skidati videe sam → samo Vyro kampanje s Frame.io materijalom.
-objavljuj_kampanje: [behemoth]
+# 18.11.: Behemoth gotov. Ušao u ABC Scrubs (MrBeast Hunger Games i All's Fair S2 = budžet potrošen, zaključani).
+objavljuj_kampanje: [scrubs]
 
 kampanje:
   behemoth:
@@ -159,6 +160,41 @@ kampanje:
       - Nothing negative about Disney, Hulu or the show. At least 15 seconds.
     hype_words: [mom, impostor, imposter, fake, real, "who are you", accident, hospital, lying,
                  liar, secret, conspiracy, "what happened", "not my mom", police, truth, weird, crazy]
+
+  scrubs:
+    naziv: "ABC: Scrubs – Humorous Clips Only"
+    kraj: "2026-11-30"
+    # Brief: samo smiješni momenti (druga Scrubs kampanja je za emotivne). Plaća $2 CPM, min 5.000 pregleda.
+    # 18.11.: u mapi su SAMO gotovi vertikalni klipovi ("Premade clips": ISCR1 .mov i ABC_FTE_*_9x16.mp4)
+    # s već upisanim titlovima i logom → preskaču se (dupli titlovi). Kad dodaju cijele epizode, rade se klipovi.
+    frameio_mapa: "https://f.io/663v3qWT"
+    preskoci_datoteke: "(?i)9x16|1080x1920|ISCR1|premade|\\.jpe?g$|\\.png$"
+    min_minuta_epizode: 0
+    auto_klipova: 6
+    min_seconds: 15            # brief: min 15 s, max 2 min
+    max_seconds: 58
+    # Disney/ABC/Hulu: AI alati ne smiju trenirati na unosu → samo Claude API (ili bez AI-a).
+    ai_samo: anthropic
+    # Obavezno u opisu jedan od dva teksta; hashtag SAMO #ScrubsPartner (ostali zabranjeni).
+    hashtags: "#ScrubsPartner"
+    caption_template: |
+      {hook}
+
+      Watch Scrubs Wednesdays at 8/7c on ABC and Stream on Hulu! {hashtags}
+    # Isti video ne smije na više računa → samo TikTok (od tamo se predaje na Vyro).
+    platforms: [tiktok]
+    brief: |
+      Campaign: SCRUBS (ABC/Hulu), the medical comedy following J.D., Turk, Elliot, Carla and Dr. Cox.
+      This campaign is for HUMOROUS clips only (emotional/heartfelt moments belong to another campaign).
+      - Pick fun, lighthearted moments: J.D.'s fantasy sequences and daydreams, character impressions,
+        Dr. Cox's rants, J.D. and Turk's banter, the Janitor's pranks.
+      - Each clip must make sense on its own and end on a punchline, not mid-sentence.
+      - Use only the provided footage. Do not misrepresent the show or take statements out of context.
+        Do not invent plot points or characters. Hooks must be true to the clip.
+      - Nothing negative about Disney, ABC, Hulu or the show. Avoid scenes with licensed music.
+      - At least 15 seconds, at most 2 minutes.
+    hype_words: [jd, turk, cox, elliot, carla, janitor, newbie, eagle, impression, daydream, fantasy,
+                 funny, laugh, "oh my god", crazy, idiot, girl, dude, doctor, hospital]
 
 # Koliko klipova napraviti iz jednog videa
 clips_per_video: 8
