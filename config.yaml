@@ -166,9 +166,10 @@ kampanje:
     kraj: "2026-11-30"
     # Brief: samo smiješni momenti (druga Scrubs kampanja je za emotivne). Plaća $2 CPM, min 5.000 pregleda.
     # 18.11.: u mapi su SAMO gotovi vertikalni klipovi ("Premade clips": ISCR1 .mov i ABC_FTE_*_9x16.mp4)
-    # s već upisanim titlovima i logom → preskaču se (dupli titlovi). Kad dodaju cijele epizode, rade se klipovi.
+    # s već upisanim titlovima i logom. Brief dopušta "Post clips as-is" → objavljuju se kakvi jesu.
     frameio_mapa: "https://f.io/663v3qWT"
-    preskoci_datoteke: "(?i)9x16|1080x1920|ISCR1|premade|\\.jpe?g$|\\.png$"
+    gotovi_klipovi: true       # ne reži i ne dodaj titlove – samo 1080x1920 mp4 + AI opis, pa u red
+    preskoci_datoteke: "(?i)\\.jpe?g$|\\.png$"
     min_minuta_epizode: 0
     auto_klipova: 6
     min_seconds: 15            # brief: min 15 s, max 2 min

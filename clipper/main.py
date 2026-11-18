@@ -257,6 +257,107 @@ def _make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> No
     print(f"✅ Gotovo: napravljeno {made} klipova.")
 
 
+# ---------------------------------------------------------------- gotovi klipovi
+def _premade_caption(text: str, name: str) -> tuple[str, float]:
+    """AI (po pravilima kampanje) napiše opis za gotov klip. Bez AI-a: opis iz imena datoteke."""
+    from . import ai
+
+    fallback = re.sub(r"(?i)^.*?_clip_|_\d+_[a-z]{2}_9x16.*$|\.\w+$", "", name)
+    fallback = re.sub(r"(?<=[a-z])(?=[A-Z])|_", " ", fallback).strip()
+    if not re.search(r"[a-z]{3}", fallback):  # ime je samo kod (npr. 1026-ISCR1-6045) → općenit opis
+        fallback = f"{CFG.get('naziv', 'This show')} never misses 😂".split(" – ")[0].replace("ABC: ", "")
+    if text and ai.available(CFG):
+        prompt = f"""You write TikTok captions for official campaign clips.
+
+Campaign rules:
+{CFG.get("brief", "")}
+
+Transcript of a ready-made clip (posted as-is):
+{text[:4000]}
+
+Return JSON: {{"caption": "...", "score": 1-10}}
+- caption: one short, catchy English sentence (max 90 characters) that is true to the clip, may end with
+  one fitting emoji. No hashtags, no quotes around it, nothing negative about the show.
+- score: how funny/engaging the clip is for TikTok (10 = best)."""
+        try:
+            raw = ai.parse_json(ai.ask(prompt, CFG))
+            cap = str(raw.get("caption") or "").strip().strip('"')
+            if cap:
+                return cap, float(raw.get("score") or 7)
+        except Exception as e:  # noqa: BLE001
+            print(f"  ⚠️ AI opis nije uspio ({e}) – opis iz imena datoteke.", flush=True)
+    return (fallback or "Scrubs moment"), 6.0
+
+
+def cmd_make_premade(url: str, kampanja: str | None = None) -> None:
+    """Config "gotovi_klipovi: true": klipovi iz mape su već gotovi (vertikalni, s titlovima)
+    → ne režu se i ne dobivaju nove titlove, samo se pretvore u 1080x1920 mp4 i idu u red."""
+    with use_campaign(kampanja):
+        _make_premade(url)
+
+
+def _make_premade(url: str) -> None:
+    from . import hosting, transcribe
+
+    tags = str(CFG.get("hashtags", "") or "").strip()
+    ensure_labels()
+    work = ROOT / "work"
+    work.mkdir(exist_ok=True)
+    made = 0
+    for vi, video in enumerate(_iter_videos(url, work, 1)):
+        print(f"▶ Gotov klip {vi + 1}: {video.name}", flush=True)
+        name = f"{time.strftime('%Y%m%d-%H%M')}-p{vi}"
+        out = work / f"{name}.mp4"
+        # 1080x1920, H.264 + AAC (TikTok/Buffer), original slike i zvuka bez ikakvih izmjena sadržaja
+        subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(video),
+                        "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,"
+                               "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out)], check=True)
+        dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                    "-of", "csv=p=0", str(out)], capture_output=True, text=True).stdout or 0)
+        text = ""
+        try:
+            wav = transcribe.extract_audio(out, work / f"audio{vi}.wav", None)
+            text = " ".join(sg.text.strip() for sg in transcribe.transcribe(wav, CFG.get("whisper_model", "small")))
+            wav.unlink(missing_ok=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"  ⚠️ Prepoznavanje govora nije uspjelo ({e}).", flush=True)
+        desc, score = _premade_caption(text, video.name)
+        caption = CFG["caption_template"].format(hook=desc, hashtags=tags).strip()
+        yt_title = CFG["youtube_title_template"].format(hook=desc, hashtags=tags)[:100]
+        video_url = hosting.upload(out, name)
+        thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
+        # ai=True → prolazi "samo_provjereni" (opis je napisao AI prema briefu); overlay=True → bez naslova na videu
+        data = {"video_url": video_url, "caption": caption, "yt_title": yt_title, "source": video.name,
+                "start": 0, "end": round(dur, 2), "score": round(score, 2), "ai": True,
+                "kampanja": CFG.get("_kampanja"), "hook": desc, "izgled": "gotov", "overlay": True}
+        body = f"""[![pregled]({thumb})]({video_url})
+
+**▶️ [Pogledaj klip]({video_url})** · {dur:.0f} s · gotov klip kampanje `{video.name}` · 🤖 AI ocjena {score:.0f}/10
+
+**Opis objave:**
+```
+{caption}
+```
+
+Objavljuje se sam (dnevne objave). Ne sviđa ti se → zatvori ovaj Issue.
+
+<details><summary>Tekst klipa</summary>
+
+{text}
+</details>
+
+<!--CLIPDATA {json.dumps(data, ensure_ascii=False)} -->
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(body)
+        gh("issue", "create", "--title", f"🤖 {desc[:70]}", "--body-file", f.name, "--label", L_CLIP)
+        out.unlink(missing_ok=True)
+        made += 1
+    print(f"✅ Gotovo: u red dodano {made} gotovih klipova.")
+
+
 # ---------------------------------------------------------------- termini
 def _parse_iso(s: str):
     from datetime import datetime
@@ -725,8 +826,11 @@ def cmd_auto(dry: bool = False, again: bool = False, only: str | None = None) ->
             if not again:
                 comment(tracker, f"{owner_mention()}🆕 **{CFG.get('naziv', key)} – nove epizode:** {names}\n\n"
                                  "Radim klipove. Kad budu gotovi, Claude ih provjeri prije objave.")
-        cmd_make(" ".join(v["url"] for v in new), 1, "", int(campaign_cfg(key).get("auto_klipova", 10)),
-                 kampanja=key)
+        if campaign_cfg(key).get("gotovi_klipovi"):
+            cmd_make_premade(" ".join(v["url"] for v in new), kampanja=key)
+        else:
+            cmd_make(" ".join(v["url"] for v in new), 1, "", int(campaign_cfg(key).get("auto_klipova", 10)),
+                     kampanja=key)
 
 # ---------------------------------------------------------------- probe
 def cmd_probe(kampanja: str) -> None:
