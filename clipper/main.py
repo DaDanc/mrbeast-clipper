@@ -265,7 +265,8 @@ def _premade_caption(text: str, name: str) -> tuple[str, float]:
     fallback = re.sub(r"(?i)^.*?_clip_|_\d+_[a-z]{2}_9x16.*$|\.\w+$", "", name)
     fallback = re.sub(r"(?<=[a-z])(?=[A-Z])|_", " ", fallback).strip()
     if not re.search(r"[a-z]{3}", fallback):  # ime je samo kod (npr. 1026-ISCR1-6045) → općenit opis
-        fallback = f"{CFG.get('naziv', 'This show')} never misses 😂".split(" – ")[0].replace("ABC: ", "")
+        show = str(CFG.get("naziv", "This show")).split(" – ")[0].replace("ABC: ", "")
+        fallback = f"{show} never misses 😂"
     if text and ai.available(CFG):
         prompt = f"""You write TikTok captions for official campaign clips.
 
@@ -297,8 +298,6 @@ def cmd_make_premade(url: str, kampanja: str | None = None) -> None:
 
 
 def _make_premade(url: str) -> None:
-    from . import hosting, transcribe
-
     tags = str(CFG.get("hashtags", "") or "").strip()
     ensure_labels()
     work = ROOT / "work"
@@ -306,33 +305,45 @@ def _make_premade(url: str) -> None:
     made = 0
     for vi, video in enumerate(_iter_videos(url, work, 1)):
         print(f"▶ Gotov klip {vi + 1}: {video.name}", flush=True)
-        name = f"{time.strftime('%Y%m%d-%H%M')}-p{vi}"
-        out = work / f"{name}.mp4"
-        # 1080x1920, H.264 + AAC (TikTok/Buffer), original slike i zvuka bez ikakvih izmjena sadržaja
-        subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(video),
-                        "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,"
-                               "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
-                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-                        "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out)], check=True)
-        dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                                    "-of", "csv=p=0", str(out)], capture_output=True, text=True).stdout or 0)
-        text = ""
         try:
-            wav = transcribe.extract_audio(out, work / f"audio{vi}.wav", None)
-            text = " ".join(sg.text.strip() for sg in transcribe.transcribe(wav, CFG.get("whisper_model", "small")))
-            wav.unlink(missing_ok=True)
-        except Exception as e:  # noqa: BLE001
-            print(f"  ⚠️ Prepoznavanje govora nije uspjelo ({e}).", flush=True)
-        desc, score = _premade_caption(text, video.name)
-        caption = CFG["caption_template"].format(hook=desc, hashtags=tags).strip()
-        yt_title = CFG["youtube_title_template"].format(hook=desc, hashtags=tags)[:100]
-        video_url = hosting.upload(out, name)
-        thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
-        # ai=True → prolazi "samo_provjereni" (opis je napisao AI prema briefu); overlay=True → bez naslova na videu
-        data = {"video_url": video_url, "caption": caption, "yt_title": yt_title, "source": video.name,
-                "start": 0, "end": round(dur, 2), "score": round(score, 2), "ai": True,
-                "kampanja": CFG.get("_kampanja"), "hook": desc, "izgled": "gotov", "overlay": True}
-        body = f"""[![pregled]({thumb})]({video_url})
+            made += _premade_one(vi, video, work, tags)
+        except Exception as e:  # noqa: BLE001 – jedan loš klip ne smije srušiti ostale
+            print(f"::error::{video.name}: nije dodan ({e})", flush=True)
+    print(f"✅ Gotovo: u red dodano {made} gotovih klipova.")
+
+
+def _premade_one(vi: int, video: Path, work: Path, tags: str) -> int:
+    from . import hosting, transcribe
+
+    name = f"{time.strftime('%Y%m%d-%H%M')}-p{vi}"
+    out = work / f"{name}.mp4"
+    # 1080x1920, H.264 + AAC (TikTok/Buffer), original slike i zvuka bez ikakvih izmjena sadržaja
+    subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(video),
+                    "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,"
+                           "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
+                    # Cloudinary besplatno prima max 100 MB → bitrate ograničen (2 min ≈ 90 MB)
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-maxrate", "5500k",
+                    "-bufsize", "11000k", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out)], check=True)
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                "-of", "csv=p=0", str(out)], capture_output=True, text=True).stdout or 0)
+    text = ""
+    try:
+        wav = transcribe.extract_audio(out, work / f"audio{vi}.wav", None)
+        text = " ".join(sg.text.strip() for sg in transcribe.transcribe(wav, CFG.get("whisper_model", "small")))
+        wav.unlink(missing_ok=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"  ⚠️ Prepoznavanje govora nije uspjelo ({e}).", flush=True)
+    desc, score = _premade_caption(text, video.name)
+    caption = CFG["caption_template"].format(hook=desc, hashtags=tags).strip()
+    yt_title = CFG["youtube_title_template"].format(hook=desc, hashtags=tags)[:100]
+    video_url = hosting.upload(out, name)
+    thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
+    # ai=True → prolazi "samo_provjereni" (opis je napisao AI prema briefu); overlay=True → bez naslova na videu
+    data = {"video_url": video_url, "caption": caption, "yt_title": yt_title, "source": video.name,
+            "start": 0, "end": round(dur, 2), "score": round(score, 2), "ai": True,
+            "kampanja": CFG.get("_kampanja"), "hook": desc, "izgled": "gotov", "overlay": True}
+    body = f"""[![pregled]({thumb})]({video_url})
 
 **▶️ [Pogledaj klip]({video_url})** · {dur:.0f} s · gotov klip kampanje `{video.name}` · 🤖 AI ocjena {score:.0f}/10
 
@@ -350,12 +361,11 @@ Objavljuje se sam (dnevne objave). Ne sviđa ti se → zatvori ovaj Issue.
 
 <!--CLIPDATA {json.dumps(data, ensure_ascii=False)} -->
 """
-        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-            f.write(body)
-        gh("issue", "create", "--title", f"🤖 {desc[:70]}", "--body-file", f.name, "--label", L_CLIP)
-        out.unlink(missing_ok=True)
-        made += 1
-    print(f"✅ Gotovo: u red dodano {made} gotovih klipova.")
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+        f.write(body)
+    gh("issue", "create", "--title", f"🤖 {desc[:70]}", "--body-file", f.name, "--label", L_CLIP)
+    out.unlink(missing_ok=True)
+    return 1
 
 
 # ---------------------------------------------------------------- termini
