@@ -244,6 +244,9 @@ def _run_test(per_streamer: list[list[dict]], n: int) -> None:
         video, hook = make_video(clip, WORK / clip["id"][:40])
         dest = out_dir / f"{k}_{video.name}"
         video.replace(dest)
+        for t in (1.0, float(clip["duration"]) * 0.6):  # sličice za brzi pregled
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.1f}", "-i", str(dest),
+                            "-frames:v", "1", "-vf", "scale=540:-2", str(dest.with_suffix(f".{int(t)}s.jpg"))])
         summary.append(f"=== {dest.name}\nTwitch: {clip['url']} ({clip['view_count']} pregleda)\n"
                        f"Opis posta:\n{caption(clip, hook)}\n")
     (out_dir / "opisi.txt").write_text("\n".join(summary), encoding="utf-8")
