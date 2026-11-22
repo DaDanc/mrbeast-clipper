@@ -8,10 +8,15 @@ CID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 out = Path("probe"); out.mkdir(exist_ok=True)
 
 def clips(login, n=12):
-    q = """query($l:String!){user(login:$l){clips(first:%d,criteria:{period:LAST_WEEK,sort:VIEWS_DESC}){edges{node{id slug title viewCount durationSeconds language url}}}}}""" % n
-    r = requests.post(GQL, json={"query": q, "variables": {"l": login}}, headers={"Client-Id": CID}, timeout=30)
-    r.raise_for_status()
-    return [e["node"] for e in r.json()["data"]["user"]["clips"]["edges"]]
+    for crit in ("{period:LAST_WEEK,sort:VIEWS_DESC}", "{filter:LAST_WEEK}", "{period:LAST_WEEK}"):
+        q = "query($l:String!){user(login:$l){clips(first:%d,criteria:%s){edges{node{id slug title viewCount durationSeconds language url}}}}}" % (n, crit)
+        r = requests.post(GQL, json={"query": q, "variables": {"l": login}}, headers={"Client-Id": CID}, timeout=30)
+        j = r.json()
+        try:
+            return [e["node"] for e in j["data"]["user"]["clips"]["edges"]]
+        except Exception:
+            print("GQL", crit, json.dumps(j)[:600])
+    sys.exit(1)
 
 def gql_url(slug):
     body = {"operationName": "VideoAccessToken_Clip", "variables": {"slug": slug},
