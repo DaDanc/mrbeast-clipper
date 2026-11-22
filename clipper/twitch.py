@@ -86,6 +86,13 @@ def top_clips(login: str, days: int) -> list[dict]:
     return out
 
 
+def clips_by_id(ids: list[str]) -> list[dict]:
+    out: list[dict] = []
+    for i in range(0, len(ids), 100):
+        out += helix("clips", [("id", x) for x in ids[i:i + 100]]).get("data") or []
+    return out
+
+
 def _slug(clip: dict) -> str:
     return clip.get("id") or clip["url"].rstrip("/").split("/")[-1]
 

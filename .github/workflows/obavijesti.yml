@@ -1,9 +1,8 @@
 name: Obavijesti (objavljeno + pregledi)
 
 on:
-  # RASPORED ISKLJUČEN dok se ne potvrde test videi.
-  # schedule:
-  #   - cron: "15 */4 * * *"   # svaka 4 sata (Buffer API limit)
+  schedule:
+    - cron: "15 */4 * * *"   # svaka 4 sata (Buffer API limit)
   workflow_dispatch:
 
 permissions:

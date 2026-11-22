@@ -1,13 +1,13 @@
 # Twitch clipper → TikTok (@beastgodclipgod)
 
 Automatski uzima najgledanije Twitch klipove (Jynxzi, rezerva CaseOh), montira ih u vertikalni
-video s titlovima i zakazuje na TikTok preko Buffera, 3× dnevno (14:00, 20:00, 22:00 po
-zagrebačkom vremenu, svaki dan s malim nasumičnim pomakom). Sve radi na GitHub Actions –
+video s titlovima i zakazuje na TikTok preko Buffera, 3× dnevno u nasumična vremena
+(svaki dan druga, između 12:00 i 23:30 po zagrebačkom vremenu, barem 2 h razmaka). Sve radi na GitHub Actions –
 računalo ne mora biti upaljeno.
 
 ## Kako radi
 
-1. **Objavi Twitch klip** (workflow) se pokreće oko svakog termina:
+1. **Objavi Twitch klip** (workflow) se pokreće svaki sat i radi samo kad je termin blizu:
    - Twitch Helix API → top klipovi zadnjih 7 dana po pregledima, prvo Jynxzi, pa CaseOh
    - filteri: 10–60 s, engleski, dovoljno pregleda, bez zabranjenih riječi u naslovu,
      nije već objavljen (`posted.json`)
@@ -35,6 +35,10 @@ Provjera: **Actions → Provjeri postavke → Run workflow** – mora završiti 
 **Actions → Objavi Twitch klip → Run workflow** (kvačica *Test* uključena, broj videa 3).
 Gotovi videi, sličice i opisi postova su na dnu stranice runa pod **Artifacts → test-videi**.
 Ako isključiš *Test*, ručni run odmah zakaže pravi klip za sljedeći slobodan termin.
+U polje *klipovi* možeš upisati Twitch ID-jeve klipova (iz `opisi.txt` test runa) – ti se objave
+DANAS u nasumična vremena.
+
+Stare objave iz Buffer reda: **Provjeri postavke** → polje *obrisi* (tekst koji objava sadrži).
 
 ## config.json
 
@@ -52,11 +56,9 @@ Ako isključiš *Test*, ručni run odmah zakaže pravi klip za sljedeći sloboda
 | `blokirane_rijeci` | klip s ovom riječi u naslovu se preskače |
 | `hook_sekundi`, `hook_max_rijeci` | koliko dugo i koliko riječi ima naslov na vrhu videa |
 | `opis_posta` | predložak opisa: `{hook}`, `{login}`, `{ime}`, `{hashtagovi}` |
-| `termini`, `pomak_minuta` | vremena objava i nasumični pomak (± min) |
+| `objave_dnevno`, `prozor_objava`, `min_razmak_minuta` | koliko objava dnevno, između kojih sati (nasumično) i najmanji razmak |
 | `obavijest_za_svaku_objavu` | `true` = @mention i za svaku uspješnu objavu (inače samo za greške i preglede) |
 
 **Dodati / promijeniti streamera:** kopiraj jedan blok u `streameri`, promijeni `login`, `ime` i
 `hashtagovi`, ostavi `"facecam": null`. Redoslijed u popisu = prioritet.
 
-Termini u `config.json` moraju biti unutar sati u kojima se workflow pokreće (cron u
-`.github/workflows/objavi-klip.yml`, sat prije termina); za nove termine promijeni i cron.

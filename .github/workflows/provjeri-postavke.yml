@@ -2,6 +2,10 @@ name: Provjeri postavke
 
 on:
   workflow_dispatch:
+    inputs:
+      obrisi:
+        description: "Obriši iz Buffer reda zakazane objave koje sadrže ovaj tekst (prazno = ništa)"
+        default: ""
 
 permissions:
   contents: read
@@ -21,4 +25,9 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -q requests cloudinary
+      - name: Obriši iz Buffera
+        if: inputs.obrisi != ''
+        env:
+          OBRISI: ${{ inputs.obrisi }}
+        run: python -m clipper.main ocisti --sadrzi "$OBRISI"
       - run: python -m clipper.main check

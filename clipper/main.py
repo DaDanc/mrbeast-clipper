@@ -81,13 +81,36 @@ def notify(body: str) -> None:
 
 
 # ---------------------------------------------------------------- termini
+def _hm(s: str) -> int:
+    hh, mm = (int(x) for x in s.split(":"))
+    return hh * 60 + mm
+
+
+def random_times(n: int, start_min: int, end_min: int, gap: int, seed: str) -> list[int]:
+    """n nasumičnih minuta u danu između start i end, međusobno barem `gap` min razmaka.
+    Isti seed → uvijek ista vremena. Ako ne stane, razmak se smanjuje."""
+    rng = random.Random(seed)
+    while gap >= 0:
+        for _ in range(2000):
+            ts = sorted(rng.randint(start_min, end_min) for _ in range(n))
+            if all(b - a >= gap for a, b in zip(ts, ts[1:])):
+                return ts
+        gap = gap // 2 if gap > 10 else gap - 10
+    return sorted(rng.randint(start_min, end_min) for _ in range(n))
+
+
+def day_slots(d) -> list[datetime]:
+    """Termini objava za dan d: `objave_dnevno` nasumičnih vremena u `prozor_objava` (svaki dan druga)."""
+    od, do = CFG.get("prozor_objava") or ["12:00", "23:30"]
+    ts = random_times(int(CFG.get("objave_dnevno", 3)), _hm(od), _hm(do),
+                      int(CFG.get("min_razmak_minuta", 120)), f"termini-{d.isoformat()}")
+    return [datetime(d.year, d.month, d.day, t // 60, t % 60, tzinfo=TZ) for t in ts]
+
+
 def _slots_around(now: datetime) -> list[datetime]:
     out = []
     for day in (-1, 0, 1, 2):
-        d = (now + timedelta(days=day)).date()
-        for t in CFG["termini"]:
-            hh, mm = (int(x) for x in t.split(":"))
-            out.append(datetime(d.year, d.month, d.day, hh, mm, tzinfo=TZ))
+        out += day_slots((now + timedelta(days=day)).date())
     return sorted(out)
 
 
@@ -96,20 +119,27 @@ def slot_key(slot: datetime) -> str:
 
 
 def due_time(slot: datetime, now: datetime) -> datetime:
-    """Termin + nasumičan pomak (isti dan + termin → uvijek isti pomak), najranije za 10 min."""
-    jit = int(CFG.get("pomak_minuta", 0) or 0)
-    due = slot + timedelta(minutes=random.Random(slot_key(slot)).randint(-jit, jit))
-    return max(due, now + timedelta(minutes=10)).replace(second=0, microsecond=0)
+    """Vrijeme objave = termin (već nasumičan), ali najranije za 10 min."""
+    return max(slot, now + timedelta(minutes=10)).replace(second=0, microsecond=0)
+
+
+def posts_on(day, state: dict) -> int:
+    return sum(1 for e in state["objavljeno"]
+               if datetime.fromisoformat(e["zakazano"]).astimezone(TZ).date() == day)
 
 
 def cmd_gate(manual: bool) -> None:
-    """Zakazani run: termin koji je za 0-75 min (ili do 20 min prošao, ako GitHub kasni).
-    Ručni run: sljedeći slobodan termin. Ispisuje termin u GITHUB_OUTPUT (prazno = ništa)."""
+    """Zakazani run (svaki sat): termin koji je za 0-75 min (ili do 20 min prošao, ako GitHub kasni).
+    Ručni run: sljedeći slobodan termin. Dan koji već ima `objave_dnevno` objava se preskače.
+    Ispisuje termin u GITHUB_OUTPUT (prazno = ništa)."""
     now = datetime.now(TZ)
-    taken = {e.get("termin") for e in load_state()["objavljeno"]}
+    state = load_state()
+    taken = {e.get("termin") for e in state["objavljeno"]}
+    per_day = int(CFG.get("objave_dnevno", 3))
+    print("Današnji termini: " + ", ".join(f"{s:%H:%M}" for s in day_slots(now.date())))
     pick = ""
     for s in _slots_around(now):
-        if slot_key(s) in taken:
+        if slot_key(s) in taken or posts_on(s.date(), state) >= per_day:
             continue
         diff = (s - now).total_seconds() / 60
         if (manual and diff > 5) or (-20 <= diff <= 75):
@@ -229,6 +259,34 @@ def cmd_run(termin: str, test: int) -> None:
     raise RuntimeError("Montaža nije uspjela ni za jedan klip:\n" + "\n".join(errors))
 
 
+def cmd_publish_ids(ids: list[str]) -> None:
+    """Ručno: objavi točno ove Twitch klipove (ID-jevi) DANAS, u nasumična vremena do kraja prozora."""
+    from . import twitch
+
+    state = load_state()
+    ids = [i for i in ids if i and i not in {e["id"] for e in state["objavljeno"]}]
+    if not ids:
+        print("Svi navedeni klipovi su već objavljeni.")
+        return
+    by_id = {str(twitch.user_id(st["login"])): st for st in CFG["streameri"]}
+    clips = twitch.clips_by_id(ids)
+    missing = set(ids) - {c["id"] for c in clips}
+    if missing:
+        raise RuntimeError(f"Twitch ne zna za klipove: {', '.join(missing)}")
+    now = datetime.now(TZ)
+    _, end = CFG.get("prozor_objava") or ["12:00", "23:30"]
+    start_min = now.hour * 60 + now.minute + 25          # prvi najranije za ~25 min (montaža traje)
+    end_min = max(_hm(end), start_min + 30 * len(clips))
+    times = random_times(len(clips), start_min, min(end_min, 23 * 60 + 55),
+                         int(CFG.get("min_razmak_minuta", 120)), f"rucno-{now.isoformat()}")
+    for clip, t in zip(sorted(clips, key=lambda c: ids.index(c["id"])), times):
+        clip["_streamer"] = by_id.get(str(clip["broadcaster_id"])) or \
+            {"login": clip["broadcaster_name"].lower(), "ime": clip["broadcaster_name"], "hashtagovi": "#twitch #fyp"}
+        slot = now.replace(hour=t // 60, minute=t % 60, second=0, microsecond=0)
+        video, hook = make_video(clip, WORK / clip["id"][:40])
+        _publish(clip, video, hook, slot, datetime.now(TZ), state)
+
+
 def _run_test(per_streamer: list[list[dict]], n: int) -> None:
     """Test: N videa bez objave. Ako ima rezervnog streamera, zadnji video je njegov (da se vide obje varijante)."""
     picks = per_streamer[0][: n - 1] if len(per_streamer) > 1 and per_streamer[1] else per_streamer[0][:n]
@@ -247,7 +305,7 @@ def _run_test(per_streamer: list[list[dict]], n: int) -> None:
         for t in (1.0, float(clip["duration"]) * 0.6):  # sličice za brzi pregled
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.1f}", "-i", str(dest),
                             "-frames:v", "1", "-vf", "scale=540:-2", str(dest.with_suffix(f".{int(t)}s.jpg"))])
-        summary.append(f"=== {dest.name}\nTwitch: {clip['url']} ({clip['view_count']} pregleda)\n"
+        summary.append(f"=== {dest.name}\nID: {clip['id']}\nTwitch: {clip['url']} ({clip['view_count']} pregleda)\n"
                        f"Opis posta:\n{caption(clip, hook)}\n")
     (out_dir / "opisi.txt").write_text("\n".join(summary), encoding="utf-8")
     print("\n".join(summary))
@@ -403,6 +461,20 @@ def cmd_fail(run_url: str, what: str) -> None:
     notify(f"{owner_mention()}❌ **{what} nije uspio**\n\n```\n{reason[-1500:]}\n```\n\nLog: {run_url}")
 
 
+def cmd_ocisti(contains: str) -> None:
+    """Obriši iz Buffer reda zakazane objave čiji tekst sadrži `contains`."""
+    from . import buffer
+
+    n = 0
+    for ch in buffer.get_channels(CFG["platforme"]):
+        for p in buffer.scheduled_posts(ch["id"]):
+            if contains.lower() in (p.get("text") or "").lower():
+                buffer.delete_post(p["id"])
+                n += 1
+                print(f"::notice::Obrisano iz Buffera ({ch['service']}, {p['dueAt']}): {(p.get('text') or '')[:60]!r}")
+    print(f"Obrisano {n} objava.")
+
+
 # ---------------------------------------------------------------- main
 def main() -> None:
     p = argparse.ArgumentParser()
@@ -412,6 +484,9 @@ def main() -> None:
     r = sub.add_parser("run")
     r.add_argument("--termin", default="")
     r.add_argument("--test", type=int, default=0)
+    r.add_argument("--ids", default="", help="Twitch ID-jevi klipova odvojeni zarezom → objava danas")
+    o = sub.add_parser("ocisti")
+    o.add_argument("--sadrzi", required=True)
     sub.add_parser("links")
     sub.add_parser("check")
     f = sub.add_parser("fail")
@@ -424,9 +499,14 @@ def main() -> None:
         if a.cmd == "gate":
             cmd_gate(a.manual)
         elif a.cmd == "run":
-            if not a.test and not a.termin:
-                raise SystemExit("Treba --termin ili --test.")
-            cmd_run(a.termin, a.test)
+            if a.ids.strip():
+                cmd_publish_ids([x.strip() for x in a.ids.replace(" ", ",").split(",") if x.strip()])
+            elif not a.test and not a.termin:
+                raise SystemExit("Treba --termin, --ids ili --test.")
+            else:
+                cmd_run(a.termin, a.test)
+        elif a.cmd == "ocisti":
+            cmd_ocisti(a.sadrzi)
         elif a.cmd == "links":
             cmd_links()
         elif a.cmd == "check":

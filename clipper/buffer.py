@@ -243,3 +243,28 @@ def get_post(post_id: str) -> dict:
            }""",
         {"id": post_id},
     )["post"]
+
+
+@lru_cache(maxsize=None)
+def _delete_mutation() -> tuple[str, str]:
+    """Sastavi deletePost mutaciju prema shemi Buffer API-ja (argument je ili `input: {id}` ili `id`)."""
+    t = gql("""query { __type(name: "Mutation") { fields { name args { name type { kind name
+               ofType { kind name } } } } } }""")["__type"]
+    f = next((x for x in t["fields"] if x["name"] == "deletePost"), None)
+    if not f:
+        raise BufferError("Buffer API nema deletePost mutaciju.")
+    arg = f["args"][0]
+    ty = arg["type"]
+    tname = ty.get("name") or (ty.get("ofType") or {}).get("name")
+    bang = "!" if ty["kind"] == "NON_NULL" else ""
+    sel = "{ __typename ... on MutationError { message } }"
+    if arg["name"] == "input":
+        return f"mutation($v: {tname}{bang}) {{ deletePost(input: $v) {sel} }}", "input"
+    return f"mutation($v: {tname}{bang}) {{ deletePost({arg['name']}: $v) {sel} }}", "id"
+
+
+def delete_post(post_id: str) -> None:
+    q, kind = _delete_mutation()
+    res = gql(q, {"v": {"id": post_id} if kind == "input" else post_id})["deletePost"]
+    if res and res.get("message"):
+        raise BufferError(res["message"])

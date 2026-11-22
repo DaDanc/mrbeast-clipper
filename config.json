@@ -30,8 +30,9 @@
 
   "platforme": ["tiktok"],
   "vremenska_zona": "Europe/Zagreb",
-  "termini": ["14:00", "20:00", "22:00"],
-  "pomak_minuta": 8,
+  "objave_dnevno": 3,
+  "prozor_objava": ["12:00", "23:30"],
+  "min_razmak_minuta": 120,
 
   "obavijest_za_svaku_objavu": false,
   "obavijest_pregledi": [500, 1000, 5000],

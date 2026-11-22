@@ -1,14 +1,12 @@
 name: Objavi Twitch klip
 
-# 3x dnevno (14:00, 20:00, 22:00 po zagrebačkom, termini u config.json): uzme najbolji neobjavljeni
-# Twitch klip, montira ga i zakaže u Bufferu za taj termin (± nasumični pomak).
-# GitHub cron je u UTC-u, pa se pokreće svaki sat oko termina (ljetno i zimsko vrijeme);
-# korak "gate" odluči je li sad stvarno vrijeme, inače ništa ne radi.
+# 3x dnevno u nasumična vremena (config.json: objave_dnevno, prozor_objava, min_razmak_minuta):
+# uzme najbolji neobjavljeni Twitch klip, montira ga i zakaže u Bufferu za taj termin.
+# Pokreće se svaki sat; korak "gate" odluči je li unutar sljedećih ~75 min termin, inače ništa ne radi.
 
 on:
-  # RASPORED ISKLJUČEN dok se ne potvrde test videi.
-  # schedule:
-  #   - cron: "20 11,12,17,18,19,20 * * *"
+  schedule:
+    - cron: "20 * * * *"
   workflow_dispatch:
     inputs:
       test:
@@ -18,6 +16,9 @@ on:
       broj:
         description: "Koliko test videa"
         default: "3"
+      klipovi:
+        description: "Twitch ID-jevi klipova (zarezom) – objavi ih DANAS u nasumična vremena (Test isključi)"
+        default: ""
 
 permissions:
   contents: write
@@ -35,7 +36,9 @@ jobs:
         env:
           MANUAL: ${{ github.event_name == 'workflow_dispatch' && '--manual' || '' }}
           TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
+          IDS: ${{ inputs.klipovi }}
         run: |
+          if [ -n "$IDS" ]; then echo "termin=ids" >> "$GITHUB_OUTPUT"; exit 0; fi
           if [ "$TEST" = "true" ]; then echo "termin=test" >> "$GITHUB_OUTPUT"; exit 0; fi
           python3 -m clipper.main gate $MANUAL
 
@@ -88,11 +91,16 @@ jobs:
           retention-days: 14
           compression-level: 0
 
+      - name: Objavi zadane klipove danas
+        if: env.TERMIN == 'ids'
+        env:
+          IDS: ${{ inputs.klipovi }}
+        run: python -m clipper.main run --ids "$IDS"
       - name: Napravi klip i zakaži u Bufferu
-        if: env.TERMIN != 'test'
+        if: env.TERMIN != 'test' && env.TERMIN != 'ids'
         run: python -m clipper.main run --termin "$TERMIN"
       - name: Spremi posted.json
-        if: env.TERMIN != 'test'
+        if: always() && env.TERMIN != 'test' && env.TERMIN != ''
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
