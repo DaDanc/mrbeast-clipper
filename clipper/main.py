@@ -200,6 +200,16 @@ def make_video(clip: dict, workdir: Path) -> tuple[Path, str]:
     print(f"▶ Klip: [{st['login']}] {clip['title']!r} ({clip['view_count']} pregleda, "
           f"{clip['duration']:.0f} s) {clip['url']}", flush=True)
     src = twitch.download(clip, workdir / "src.mp4")
+    vh = CFG.get("vrhunac") or {}
+    if vh.get("ukljuceno", True):
+        from . import highlight
+        try:
+            ed = highlight.plan(src, render.probe_duration(src), vh)
+            print(f"   🎯 {ed.reason}", flush=True)
+            clip["_vrhunac"] = ed.reason
+            src = highlight.apply(src, ed, workdir / "src_edit.mp4")
+        except Exception as e:  # rezanje nije bitno – ako pukne, ide originalni klip
+            print(f"::warning::Traženje vrhunca nije uspjelo ({e}) – ide cijeli klip", flush=True)
     dur = render.probe_duration(src)
     wav = transcribe.extract_audio(src, workdir / "audio.wav")
     segs = transcribe.transcribe(wav, CFG.get("whisper_model", "small"))
@@ -268,7 +278,6 @@ def cmd_publish_ids(ids: list[str]) -> None:
     if not ids:
         print("Svi navedeni klipovi su već objavljeni.")
         return
-    by_id = {str(twitch.user_id(st["login"])): st for st in CFG["streameri"]}
     clips = twitch.clips_by_id(ids)
     missing = set(ids) - {c["id"] for c in clips}
     if missing:
@@ -280,8 +289,7 @@ def cmd_publish_ids(ids: list[str]) -> None:
     times = random_times(len(clips), start_min, min(end_min, 23 * 60 + 55),
                          int(CFG.get("min_razmak_minuta", 120)), f"rucno-{now.isoformat()}")
     for clip, t in zip(sorted(clips, key=lambda c: ids.index(c["id"])), times):
-        clip["_streamer"] = by_id.get(str(clip["broadcaster_id"])) or \
-            {"login": clip["broadcaster_name"].lower(), "ime": clip["broadcaster_name"], "hashtagovi": "#twitch #fyp"}
+        clip["_streamer"] = _streamer_for(clip)
         slot = now.replace(hour=t // 60, minute=t % 60, second=0, microsecond=0)
         video, hook = make_video(clip, WORK / clip["id"][:40])
         _publish(clip, video, hook, slot, datetime.now(TZ), state)
@@ -295,6 +303,31 @@ def _run_test(per_streamer: list[list[dict]], n: int) -> None:
     picks += [c for c in per_streamer[0] if c not in picks][: n - len(picks)]
     if not picks:
         raise RuntimeError("Nema nijednog klipa koji prolazi filtere.")
+    _render_test(picks)
+
+
+def _streamer_for(clip: dict) -> dict:
+    from . import twitch
+
+    for st in CFG["streameri"]:
+        if str(twitch.user_id(st["login"])) == str(clip["broadcaster_id"]):
+            return st
+    return {"login": clip["broadcaster_name"].lower(), "ime": clip["broadcaster_name"], "hashtagovi": "#twitch #fyp"}
+
+
+def cmd_test_ids(ids: list[str]) -> None:
+    """Test zadanih klipova (bez objave) – npr. da se provjeri nova montaža na već objavljenom klipu."""
+    from . import twitch
+
+    clips = sorted(twitch.clips_by_id(ids), key=lambda c: ids.index(c["id"]) if c["id"] in ids else 99)
+    if not clips:
+        raise RuntimeError(f"Twitch ne zna za klipove: {', '.join(ids)}")
+    for c in clips:
+        c["_streamer"] = _streamer_for(c)
+    _render_test(clips)
+
+
+def _render_test(picks: list[dict]) -> None:
     out_dir = ROOT / "out"
     out_dir.mkdir(exist_ok=True)
     summary = []
@@ -302,11 +335,11 @@ def _run_test(per_streamer: list[list[dict]], n: int) -> None:
         video, hook = make_video(clip, WORK / clip["id"][:40])
         dest = out_dir / f"{k}_{video.name}"
         video.replace(dest)
-        for t in (1.0, float(clip["duration"]) * 0.6):  # sličice za brzi pregled
+        for t in (0.5, float(clip["duration"]) * 0.6):  # sličice za brzi pregled
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.1f}", "-i", str(dest),
-                            "-frames:v", "1", "-vf", "scale=540:-2", str(dest.with_suffix(f".{int(t)}s.jpg"))])
+                            "-frames:v", "1", "-vf", "scale=540:-2", str(dest.with_suffix(f".{t:.1f}s.jpg"))])
         summary.append(f"=== {dest.name}\nID: {clip['id']}\nTwitch: {clip['url']} ({clip['view_count']} pregleda)\n"
-                       f"Opis posta:\n{caption(clip, hook)}\n")
+                       f"Montaža: {clip.get('_vrhunac', '-')}\nOpis posta:\n{caption(clip, hook)}\n")
     (out_dir / "opisi.txt").write_text("\n".join(summary), encoding="utf-8")
     print("\n".join(summary))
 
@@ -499,8 +532,11 @@ def main() -> None:
         if a.cmd == "gate":
             cmd_gate(a.manual)
         elif a.cmd == "run":
-            if a.ids.strip():
-                cmd_publish_ids([x.strip() for x in a.ids.replace(" ", ",").split(",") if x.strip()])
+            ids = [x.strip() for x in a.ids.replace(" ", ",").split(",") if x.strip()]
+            if ids and a.test:
+                cmd_test_ids(ids)
+            elif ids:
+                cmd_publish_ids(ids)
             elif not a.test and not a.termin:
                 raise SystemExit("Treba --termin, --ids ili --test.")
             else:

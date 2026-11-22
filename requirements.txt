@@ -2,3 +2,4 @@ faster-whisper>=1.1.0
 requests>=2.31
 yt-dlp
 cloudinary>=1.40
+numpy

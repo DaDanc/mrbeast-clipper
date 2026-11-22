@@ -17,7 +17,7 @@ on:
         description: "Koliko test videa"
         default: "3"
       klipovi:
-        description: "Twitch ID-jevi klipova (zarezom) – objavi ih DANAS u nasumična vremena (Test isključi)"
+        description: "Twitch ID-jevi klipova (zarezom). Test uključen = samo napravi te videe; Test isključen = objavi ih DANAS"
         default: ""
 
 permissions:
@@ -38,8 +38,8 @@ jobs:
           TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
           IDS: ${{ inputs.klipovi }}
         run: |
-          if [ -n "$IDS" ]; then echo "termin=ids" >> "$GITHUB_OUTPUT"; exit 0; fi
           if [ "$TEST" = "true" ]; then echo "termin=test" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ -n "$IDS" ]; then echo "termin=ids" >> "$GITHUB_OUTPUT"; exit 0; fi
           python3 -m clipper.main gate $MANUAL
 
   klip:
@@ -81,7 +81,8 @@ jobs:
         if: env.TERMIN == 'test'
         env:
           BROJ: ${{ inputs.broj }}
-        run: python -m clipper.main run --test "${BROJ:-3}"
+          IDS: ${{ inputs.klipovi }}
+        run: python -m clipper.main run --test "${BROJ:-3}" --ids "$IDS"
       - name: Spremi test videe
         if: env.TERMIN == 'test'
         uses: actions/upload-artifact@v4

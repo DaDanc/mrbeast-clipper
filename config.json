@@ -34,6 +34,14 @@
   "prozor_objava": ["12:00", "23:30"],
   "min_razmak_minuta": 120,
 
+  "vrhunac": {
+    "ukljuceno": true,
+    "teaser_sekundi": 2.0,
+    "max_uvod_sekundi": 6,
+    "min_kontrast_db": 8,
+    "vrhunac_nakon_sekundi": 3.5
+  },
+
   "obavijest_za_svaku_objavu": false,
   "obavijest_pregledi": [500, 1000, 5000],
   "prati_dana": 7

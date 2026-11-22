@@ -1,3 +1,4 @@
+| `vrhunac` | `ukljuceno` (false = uvijek cijeli klip), `teaser_sekundi` (duljina teasera na početku), `max_uvod_sekundi` (koliko klipa ostaje prije vrhunca), `min_kontrast_db` (koliko vrhunac mora biti glasniji od ostatka), `vrhunac_nakon_sekundi` (ako je vrhunac ranije, ništa se ne reže) |
 # Twitch clipper → TikTok (@beastgodclipgod)
 
 Automatski uzima najgledanije Twitch klipove (Jynxzi, rezerva CaseOh), montira ih u vertikalni
@@ -11,6 +12,8 @@ računalo ne mora biti upaljeno.
    - Twitch Helix API → top klipovi zadnjih 7 dana po pregledima, prvo Jynxzi, pa CaseOh
    - filteri: 10–60 s, engleski, dovoljno pregleda, bez zabranjenih riječi u naslovu,
      nije već objavljen (`posted.json`)
+   - **vrhunac**: po zvuku nađe najglasniji trenutak (vrisak, dernjava). Ako je kasno u klipu, video
+     počinje s ~2 s tog trenutka (teaser), pa ide klip od najviše 6 s prije vrhunca – dosadan početak se reže
    - skidanje (yt-dlp, rezerva direktni Twitch link), titlovi riječ po riječ (faster-whisper),
      hook iz naslova klipa na vrhu prve ~3 s
    - video na Cloudinary → Buffer ga zakaže za termin → ID klipa se upiše u `posted.json`
@@ -35,8 +38,8 @@ Provjera: **Actions → Provjeri postavke → Run workflow** – mora završiti 
 **Actions → Objavi Twitch klip → Run workflow** (kvačica *Test* uključena, broj videa 3).
 Gotovi videi, sličice i opisi postova su na dnu stranice runa pod **Artifacts → test-videi**.
 Ako isključiš *Test*, ručni run odmah zakaže pravi klip za sljedeći slobodan termin.
-U polje *klipovi* možeš upisati Twitch ID-jeve klipova (iz `opisi.txt` test runa) – ti se objave
-DANAS u nasumična vremena.
+U polje *klipovi* možeš upisati Twitch ID-jeve klipova (iz `opisi.txt` test runa): uz uključen *Test* napravi
+samo te videe (artifact), uz isključen *Test* ih objavi DANAS u nasumična vremena.
 
 Stare objave iz Buffer reda: **Provjeri postavke** → polje *obrisi* (tekst koji objava sadrži).
 
