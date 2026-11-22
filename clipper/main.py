@@ -328,6 +328,8 @@ def cmd_test_ids(ids: list[str]) -> None:
 
 
 def _render_test(picks: list[dict]) -> None:
+    from . import render
+
     out_dir = ROOT / "out"
     out_dir.mkdir(exist_ok=True)
     summary = []
@@ -335,7 +337,7 @@ def _render_test(picks: list[dict]) -> None:
         video, hook = make_video(clip, WORK / clip["id"][:40])
         dest = out_dir / f"{k}_{video.name}"
         video.replace(dest)
-        for t in (0.5, float(clip["duration"]) * 0.6):  # sličice za brzi pregled
+        for t in (0.5, render.probe_duration(dest) * 0.6):  # sličice za brzi pregled
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.1f}", "-i", str(dest),
                             "-frames:v", "1", "-vf", "scale=540:-2", str(dest.with_suffix(f".{t:.1f}s.jpg"))])
         summary.append(f"=== {dest.name}\nID: {clip['id']}\nTwitch: {clip['url']} ({clip['view_count']} pregleda)\n"
