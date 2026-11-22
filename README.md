@@ -1,4 +1,3 @@
-| `vrhunac` | `ukljuceno` (false = uvijek cijeli klip), `teaser_sekundi` (duljina teasera na početku), `max_uvod_sekundi` (koliko klipa ostaje prije vrhunca), `min_kontrast_db` (koliko vrhunac mora biti glasniji od ostatka), `vrhunac_nakon_sekundi` (ako je vrhunac ranije, ništa se ne reže) |
 # Twitch clipper → TikTok (@beastgodclipgod)
 
 Automatski uzima najgledanije Twitch klipove (Jynxzi, rezerva CaseOh), montira ih u vertikalni
@@ -60,6 +59,7 @@ Stare objave iz Buffer reda: **Provjeri postavke** → polje *obrisi* (tekst koj
 | `hook_sekundi`, `hook_max_rijeci` | koliko dugo i koliko riječi ima naslov na vrhu videa |
 | `opis_posta` | predložak opisa: `{hook}`, `{login}`, `{ime}`, `{hashtagovi}` |
 | `objave_dnevno`, `prozor_objava`, `min_razmak_minuta` | koliko objava dnevno, između kojih sati (nasumično) i najmanji razmak |
+| `vrhunac` | `ukljuceno` (false = uvijek cijeli klip), `teaser_sekundi` (duljina teasera na početku), `max_uvod_sekundi` (koliko klipa ostaje prije vrhunca), `min_kontrast_db` (koliko vrhunac mora biti glasniji od ostatka), `vrhunac_nakon_sekundi` (ako je vrhunac ranije, ništa se ne reže) |
 | `obavijest_za_svaku_objavu` | `true` = @mention i za svaku uspješnu objavu (inače samo za greške i preglede) |
 
 **Dodati / promijeniti streamera:** kopiraj jedan blok u `streameri`, promijeni `login`, `ime` i
