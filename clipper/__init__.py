@@ -1,1 +1,1 @@
-# MrBeast kliper
+# Twitch clipper (Jynxzi / CaseOh → TikTok)

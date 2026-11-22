@@ -1,1032 +1,289 @@
-"""Glavni program. Pokreću ga GitHub Actions workflowi.
+"""Twitch → TikTok clipper. Pokreću ga GitHub Actions workflowi.
 
-  python -m clipper.main make  --url LINK      -> napravi klipove i otvori Issue za svaki
-  python -m clipper.main publish --issue BROJ  -> objavi klip iz Issuea preko Buffera
-  python -m clipper.main links                 -> skupi linkove objava za Vyro
-  python -m clipper.main check                 -> provjeri Buffer i Cloudinary postavke
+  python -m clipper.main gate                 -> je li sad vrijeme za objavu (ispisuje termin)
+  python -m clipper.main run --termin T       -> odaberi klip, montiraj, pošalji u Buffer za termin T
+  python -m clipper.main run --test 3         -> napravi 3 videa u mapu out/ (bez objave)
+  python -m clipper.main links                -> obavijest kad je klip objavljen + pregledi
+  python -m clipper.main check                -> provjeri Twitch, Buffer i Cloudinary
+  python -m clipper.main fail --run-url URL   -> obavijest da run nije uspio
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import random
 import re
 import subprocess
 import sys
 import tempfile
-import time
+import traceback
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-import yaml
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
-CFG = yaml.safe_load((ROOT / "config.yaml").read_text())
-
-L_CLIP = "klip"
-L_APPROVE = "objavi"
-L_POSTED = "objavljeno"
-L_LINKS = "linkovi"
-TRACKER_TITLE = "📋 Linkovi za Vyro"
-
-
-# ---------------------------------------------------------------- kampanje
-# Svaka kampanja u config "kampanje" može pregaziti bilo koju postavku (hashtags,
-# caption_template, brief, min_seconds, platforms...). Klip pamti svoju kampanju u CLIPDATA.
-BASE_CFG = CFG
+CFG = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
+STATE = ROOT / "posted.json"
+WORK = ROOT / "work"
+ERROR_FILE = WORK / "greska.txt"
+TRACKER_TITLE = "📋 Objave na TikToku"
+OLD_TRACKER_TITLES = ["📋 Linkovi za Vyro"]
+TZ = ZoneInfo(CFG.get("vremenska_zona", "Europe/Zagreb"))
 
 
-def default_campaign() -> str:
-    return str(BASE_CFG.get("zadana_kampanja") or next(iter(BASE_CFG.get("kampanje") or {"": 0})))
+# ---------------------------------------------------------------- stanje (posted.json)
+def load_state() -> dict:
+    if STATE.exists():
+        return json.loads(STATE.read_text(encoding="utf-8"))
+    return {"objavljeno": []}
 
 
-def clip_campaign(d: dict | None) -> str:
-    """Kampanja klipa; stari klipovi bez oznake pripadaju config "kampanja_bez_oznake"."""
-    return (d or {}).get("kampanja") or str(BASE_CFG.get("kampanja_bez_oznake") or default_campaign())
+def save_state(state: dict) -> None:
+    STATE.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def campaign_cfg(key: str | None) -> dict:
-    c = dict(BASE_CFG)
-    key = key or default_campaign()
-    c.update((BASE_CFG.get("kampanje") or {}).get(key) or {})
-    c["_kampanja"] = key
-    return c
-
-
-class use_campaign:
-    """with use_campaign("phony"): ... → unutar bloka CFG su postavke te kampanje."""
-
-    def __init__(self, key: str | None):
-        self.key = key
-
-    def __enter__(self):
-        global CFG
-        CFG = campaign_cfg(self.key)
-        return CFG
-
-    def __exit__(self, *exc):
-        global CFG
-        CFG = BASE_CFG
-        return False
-
-
-def campaign_active(key: str | None) -> bool:
-    from datetime import date
-    c = campaign_cfg(key)
-    if key and key not in (BASE_CFG.get("kampanje") or {}):
-        return False
-    end = str(c.get("kraj") or "").strip()
-    return not (end and date.today().isoformat() > end)
-
-
-# ---------------------------------------------------------------- GitHub helperi
-def gh(*args: str, capture: bool = True) -> str:
-    res = subprocess.run(["gh", *args], capture_output=capture, text=True)
+# ---------------------------------------------------------------- GitHub obavijesti
+def gh(*args: str) -> str:
+    res = subprocess.run(["gh", *args], capture_output=True, text=True)
     if res.returncode != 0:
         raise RuntimeError(f"gh {' '.join(args[:2])} nije uspio: {res.stderr.strip()}")
     return (res.stdout or "").strip()
 
 
-def ensure_labels() -> None:
-    for name, color, desc in [
-        (L_CLIP, "1d76db", "Novi klip čeka pregled"),
-        (L_APPROVE, "0e8a16", "Dodaj ovaj label da se klip objavi"),
-        (L_POSTED, "5319e7", "Poslano u Buffer"),
-        (L_LINKS, "fbca04", "Linkovi objava su skupljeni"),
-    ]:
-        subprocess.run(["gh", "label", "create", name, "--color", color, "--description", desc, "--force"],
-                       capture_output=True)
-
-
-def comment(issue: int, body: str) -> None:
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-        f.write(body)
-    gh("issue", "comment", str(issue), "--body-file", f.name)
-
-
-def read_json_marker(text: str, marker: str) -> dict | None:
-    m = re.search(rf"<!--{marker}\s*(\{{.*?\}})\s*-->", text, re.S)
-    return json.loads(m.group(1)) if m else None
-
-
-# ---------------------------------------------------------------- make
-def fmt_time(s: float) -> str:
-    return f"{int(s // 60)}:{int(s % 60):02d}"
-
-
-def used_ranges() -> dict[str, list[tuple[float, float]]]:
-    """Već napravljeni klipovi po izvornom videu, da se isti momenti ne ponavljaju."""
-    out: dict[str, list[tuple[float, float]]] = {}
-    try:
-        issues = json.loads(gh("issue", "list", "--state", "all", "--label", L_CLIP, "--limit", "500",
-                               "--json", "number,body"))
-    except Exception:
-        return out
-    redo = {int(x) for x in (CFG.get("napravi_ponovo") or [])}
-    for i in issues:
-        if i.get("number") in redo:
-            continue
-        d = read_json_marker(i.get("body") or "", "CLIPDATA")
-        if d and "start" in d and "end" in d:
-            out.setdefault(d.get("source", ""), []).append((float(d["start"]), float(d["end"])))
-    return out
-
-
-def cmd_make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0,
-             kampanja: str | None = None) -> None:
-    with use_campaign(kampanja):
-        _make(url, max_videos, hashtags, n_clips)
-
-
-def _iter_videos(url: str, work: Path, max_videos: int):
-    """Skida linkove jedan po jedan i briše izvor nakon obrade (epizode znaju imati 9 GB)."""
-    import shutil
-    from . import fetch
-
-    for ui, u in enumerate(url.split()):
-        src = work / f"src{ui}"
-        print(f"▶ Preuzimam materijal {ui + 1}/{len(url.split())}...", flush=True)
-        try:
-            vids = fetch.fetch(u, src, max_videos=max_videos)
-        except Exception as e:  # noqa: BLE001
-            print(f"::error::Preuzimanje nije uspjelo: {e}")
-            shutil.rmtree(src, ignore_errors=True)
-            continue
-        for v in vids:
-            yield v
-        shutil.rmtree(src, ignore_errors=True)
-
-
-def _make(url: str, max_videos: int, hashtags: str = "", n_clips: int = 0) -> None:
-    from . import ai, highlights, hosting, render, transcribe
-
-    n_clips = n_clips or int(CFG["clips_per_video"])
-    tags = (hashtags or CFG.get("hashtags", "")).strip()
-    print(f"▶ Kampanja: {CFG.get('_kampanja')} · hashtagovi: {tags or '(nema)'}", flush=True)
-    ensure_labels()
-    work = ROOT / "work"
-    work.mkdir(exist_ok=True)
-    videos = _iter_videos(url, work, max_videos)
-
-    made = 0
-    for vi, video in enumerate(videos):
-        print(f"▶ Video {vi + 1}: {video.name}", flush=True)
-        wav = transcribe.extract_audio(video, work / f"audio{vi}.wav", CFG.get("audio_govor"))
-        print("▶ Prepoznajem govor (ovo traje najduže)...", flush=True)
-        segs = transcribe.transcribe(wav, CFG.get("whisper_model", "small"))
-        if not segs:
-            print("  Nema govora u videu, preskačem.")
-            continue
-        loud = highlights.loudness_per_second(wav)
-        used = used_ranges().get(video.name, [])
-        if used:
-            print(f"  Preskačem {len(used)} već iskorištenih momenata iz ovog videa.", flush=True)
-        clips = []
-        if CFG.get("ai_izbor", True) and ai.available(CFG):
-            try:
-                clips = ai.pick_clips(segs, n_clips, CFG["min_seconds"], CFG["max_seconds"], CFG, exclude=used)
-            except Exception as e:
-                print(f"  ⚠️ AI odabir nije uspio ({e}) – biram po starom.", flush=True)
-        elif CFG.get("ai_izbor", True):
-            print("  ℹ️ Nema dopuštenog AI ključa – biram po glasnoći i ključnim riječima.", flush=True)
-        if not clips:
-            clips = highlights.find_clips(
-                segs, loud, CFG["hype_words"], n_clips, CFG["min_seconds"], CFG["max_seconds"], exclude=used
-            )
-        wav.unlink(missing_ok=True)
-        stamp = time.strftime("%Y%m%d-%H%M")
-        created: list[tuple[float, int]] = []
-        for ci, clip in enumerate(clips):
-            name = f"{stamp}-v{vi}-c{ci}"
-            out = work / f"{name}.mp4"
-            print(f"▶ Renderiram klip {ci + 1}/{len(clips)} ({fmt_time(clip.start)}-{fmt_time(clip.end)})", flush=True)
-            nv = CFG.get("naslov_na_videu", "auto")
-            show_hook = clip.ai if str(nv).lower() == "auto" else bool(nv)
-            render.render(video, clip, segs, out, work, show_hook=show_hook, audio_mix=CFG.get("audio_mix"),
-                          layout=str(CFG.get("izgled", "blur")))
-            video_url = hosting.upload(out, name)
-            thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
-
-            desc = clip.caption or clip.hook
-            caption = CFG["caption_template"].format(hook=desc, hashtags=tags).strip()
-            yt_title = CFG["youtube_title_template"].format(hook=clip.hook if clip.ai else desc, hashtags=tags)[:100]
-            data = {"video_url": video_url, "caption": caption, "yt_title": yt_title,
-                    "source": video.name, "start": round(clip.start, 2), "end": round(clip.end, 2),
-                    "score": round(clip.score, 2), "ai": clip.ai, "kampanja": CFG.get("_kampanja"),
-                    "hook": clip.hook, "izgled": str(CFG.get("izgled", "blur")),
-                    "v": int(CFG.get("izgled_verzija", 1)),
-                    "overlay": bool(show_hook and str(CFG.get("izgled", "blur")) == "full")}
-            grade = f"🤖 AI ocjena {clip.score:.0f}/10" if clip.ai else f"ocjena {clip.score:.1f}"
-            body = f"""[![pregled]({thumb})]({video_url})
-
-**▶️ [Pogledaj klip]({video_url})** · {clip.duration:.0f} s · iz `{video.name}` ({fmt_time(clip.start)}–{fmt_time(clip.end)}) · {grade}
-
-**Opis objave:**
-```
-{caption}
-```
-
-**Što sad?**
-- Sviđa ti se → dodaj label **`{L_APPROVE}`** (desno: Labels). Klip ide na {", ".join(CFG["platforms"])}.
-- Ne sviđa ti se → samo zatvori ovaj Issue.
-
-<details><summary>Tekst klipa</summary>
-
-{clip.text}
-</details>
-
-<!--CLIPDATA {json.dumps(data, ensure_ascii=False)} -->
-"""
-            title = f"{'🤖' if clip.ai else '🎬'} {clip.hook[:70]}"
-            with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-                f.write(body)
-            url_issue = gh("issue", "create", "--title", title, "--body-file", f.name, "--label", L_CLIP)
-            created.append((clip.score, int(url_issue.rstrip("/").split("/")[-1])))
-            out.unlink(missing_ok=True)
-            made += 1
-
-        n_auto = int(CFG.get("auto_publish", 0) or 0)
-        if n_auto > 0 and created:
-            best = sorted(created, reverse=True)[:n_auto]
-            print(f"▶ Automatski objavljujem {len(best)} najbolja klipa: {[n for _, n in best]}", flush=True)
-            for _, num in best:
-                try:
-                    gh("issue", "edit", str(num), "--add-label", L_APPROVE)
-                    cmd_publish(num)
-                except (Exception, SystemExit) as e:
-                    print(f"  ⚠️ Issue #{num} nije objavljen: {e}")
-    print(f"✅ Gotovo: napravljeno {made} klipova.")
-
-
-# ---------------------------------------------------------------- gotovi klipovi
-def _premade_caption(text: str, name: str) -> tuple[str, float]:
-    """AI (po pravilima kampanje) napiše opis za gotov klip. Bez AI-a: opis iz imena datoteke."""
-    from . import ai
-
-    fallback = re.sub(r"(?i)^.*?_clip_|_\d+_[a-z]{2}_9x16.*$|\.\w+$", "", name)
-    fallback = re.sub(r"(?<=[a-z])(?=[A-Z])|_", " ", fallback).strip()
-    if not re.search(r"[a-z]{3}", fallback):  # ime je samo kod (npr. 1026-ISCR1-6045) → općenit opis
-        show = str(CFG.get("naziv", "This show")).split(" – ")[0].replace("ABC: ", "")
-        fallback = f"{show} never misses 😂"
-    if text and ai.available(CFG):
-        prompt = f"""You write TikTok captions for official campaign clips.
-
-Campaign rules:
-{CFG.get("brief", "")}
-
-Transcript of a ready-made clip (posted as-is):
-{text[:4000]}
-
-Return JSON: {{"caption": "...", "score": 1-10}}
-- caption: one short, catchy English sentence (max 90 characters) that is true to the clip, may end with
-  one fitting emoji. No hashtags, no quotes around it, nothing negative about the show.
-- score: how funny/engaging the clip is for TikTok (10 = best)."""
-        try:
-            raw = ai.parse_json(ai.ask(prompt, CFG))
-            cap = str(raw.get("caption") or "").strip().strip('"')
-            if cap:
-                return cap, float(raw.get("score") or 7)
-        except Exception as e:  # noqa: BLE001
-            print(f"  ⚠️ AI opis nije uspio ({e}) – opis iz imena datoteke.", flush=True)
-    return (fallback or "Scrubs moment"), 6.0
-
-
-def cmd_make_premade(url: str, kampanja: str | None = None) -> None:
-    """Config "gotovi_klipovi: true": klipovi iz mape su već gotovi (vertikalni, s titlovima)
-    → ne režu se i ne dobivaju nove titlove, samo se pretvore u 1080x1920 mp4 i idu u red."""
-    with use_campaign(kampanja):
-        _make_premade(url)
-
-
-def _make_premade(url: str) -> None:
-    tags = str(CFG.get("hashtags", "") or "").strip()
-    ensure_labels()
-    work = ROOT / "work"
-    work.mkdir(exist_ok=True)
-    made = 0
-    for vi, video in enumerate(_iter_videos(url, work, 1)):
-        print(f"▶ Gotov klip {vi + 1}: {video.name}", flush=True)
-        try:
-            made += _premade_one(vi, video, work, tags)
-        except Exception as e:  # noqa: BLE001 – jedan loš klip ne smije srušiti ostale
-            print(f"::error::{video.name}: nije dodan ({e})", flush=True)
-    print(f"✅ Gotovo: u red dodano {made} gotovih klipova.")
-
-
-def _premade_one(vi: int, video: Path, work: Path, tags: str) -> int:
-    from . import hosting, transcribe
-
-    name = f"{time.strftime('%Y%m%d-%H%M')}-p{vi}"
-    out = work / f"{name}.mp4"
-    # 1080x1920, H.264 + AAC (TikTok/Buffer), original slike i zvuka bez ikakvih izmjena sadržaja
-    subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(video),
-                    "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,"
-                           "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
-                    # Cloudinary besplatno prima max 100 MB → bitrate ograničen (2 min ≈ 90 MB)
-                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-maxrate", "5500k",
-                    "-bufsize", "11000k", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out)], check=True)
-    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                                "-of", "csv=p=0", str(out)], capture_output=True, text=True).stdout or 0)
-    text = ""
-    try:
-        wav = transcribe.extract_audio(out, work / f"audio{vi}.wav", None)
-        text = " ".join(sg.text.strip() for sg in transcribe.transcribe(wav, CFG.get("whisper_model", "small")))
-        wav.unlink(missing_ok=True)
-    except Exception as e:  # noqa: BLE001
-        print(f"  ⚠️ Prepoznavanje govora nije uspjelo ({e}).", flush=True)
-    desc, score = _premade_caption(text, video.name)
-    caption = CFG["caption_template"].format(hook=desc, hashtags=tags).strip()
-    yt_title = CFG["youtube_title_template"].format(hook=desc, hashtags=tags)[:100]
-    video_url = hosting.upload(out, name)
-    thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", video_url).rsplit(".", 1)[0] + ".jpg"
-    # ai=True → prolazi "samo_provjereni" (opis je napisao AI prema briefu); overlay=True → bez naslova na videu
-    data = {"video_url": video_url, "caption": caption, "yt_title": yt_title, "source": video.name,
-            "start": 0, "end": round(dur, 2), "score": round(score, 2), "ai": True,
-            "kampanja": CFG.get("_kampanja"), "hook": desc, "izgled": "gotov", "overlay": True}
-    body = f"""[![pregled]({thumb})]({video_url})
-
-**▶️ [Pogledaj klip]({video_url})** · {dur:.0f} s · gotov klip kampanje `{video.name}` · 🤖 AI ocjena {score:.0f}/10
-
-**Opis objave:**
-```
-{caption}
-```
-
-Objavljuje se sam (dnevne objave). Ne sviđa ti se → zatvori ovaj Issue.
-
-<details><summary>Tekst klipa</summary>
-
-{text}
-</details>
-
-<!--CLIPDATA {json.dumps(data, ensure_ascii=False)} -->
-"""
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-        f.write(body)
-    gh("issue", "create", "--title", f"🤖 {desc[:70]}", "--body-file", f.name, "--label", L_CLIP)
-    out.unlink(missing_ok=True)
-    return 1
-
-
-# ---------------------------------------------------------------- termini
-def _parse_iso(s: str):
-    from datetime import datetime
-    return datetime.fromisoformat(s.replace("Z", "+00:00"))
-
-
-def next_slot(taken: list, rng=None) -> "datetime":
-    """Sljedeći termin objave.
-
-    Ako je u configu "razmak_minuta" (npr. [60, 100]): objava svakih 60–100 min (svaki put drugačije),
-    samo unutar "prozor_objava" (npr. ["14:00", "04:00"]).
-    Inače: prvi slobodan termin iz post_times (najmanje 30 min od drugih objava)."""
-    import random
-    from datetime import datetime, timedelta
-    from zoneinfo import ZoneInfo
-
-    tz = ZoneInfo(CFG.get("timezone", "Europe/Zagreb"))
-    now = datetime.now(tz) + timedelta(minutes=15)
-    pauza = str(CFG.get("pauza_do") or "").strip()
-    if pauza:  # npr. "2026-10-31 18:00" – prije toga se ništa ne objavljuje
-        p = datetime.strptime(pauza, "%Y-%m-%d %H:%M").replace(tzinfo=tz)
-        now = max(now, p)
-    rng = rng or random.Random()
-
-    gap = CFG.get("razmak_minuta")
-    if gap:
-        lo, hi = int(gap[0]), int(gap[1])
-        last = max(taken).astimezone(tz) if taken else None
-        slot = max(now + timedelta(minutes=rng.randint(0, 12)),
-                   (last + timedelta(minutes=rng.randint(lo, hi))) if last else now)
-        win = CFG.get("prozor_objava")
-        if win:
-            sh, sm = (int(x) for x in win[0].split(":"))
-            eh, em = (int(x) for x in win[1].split(":"))
-            start_m, end_m = sh * 60 + sm, eh * 60 + em
-            for _ in range(3):
-                m = slot.hour * 60 + slot.minute
-                inside = (start_m <= m < end_m) if start_m < end_m else (m >= start_m or m < end_m)
-                if inside:
-                    break
-                # pomakni na početak sljedećeg prozora (+ malo slučajnih minuta)
-                day = slot.date() if m < start_m else (slot + timedelta(days=1)).date()
-                slot = datetime(day.year, day.month, day.day, sh, sm, tzinfo=tz) + \
-                    timedelta(minutes=rng.randint(3, 25))
-        return slot.replace(second=0, microsecond=0)
-
-    times = sorted(CFG.get("post_times") or ["18:00", "20:30", "23:00"])
-    jit = int(CFG.get("pomak_minuta", 0) or 0)  # svaki dan malo drugačije vrijeme, kao da objavljuje čovjek
-    for day in range(0, 60):
-        d = (now + timedelta(days=day)).date()
-        for t in times:
-            hh, mm = (int(x) for x in t.split(":"))
-            slot = datetime(d.year, d.month, d.day, hh, mm, tzinfo=tz)
-            if jit:  # isti dan + termin → uvijek isti pomak (da se ne "seli" između pokretanja)
-                slot += timedelta(minutes=random.Random(f"{d}-{t}").randint(-jit, jit))
-            if slot < now:
-                continue
-            if all(abs((slot - x).total_seconds()) >= 30 * 60 for x in taken):
-                return slot
-    raise RuntimeError("Nema slobodnog termina u sljedećih 60 dana.")
-
-
-def _utc_iso(dt) -> str:
-    from datetime import timezone
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-
-
-def _local(dt) -> str:
-    from zoneinfo import ZoneInfo
-    return dt.astimezone(ZoneInfo(CFG.get("timezone", "Europe/Zagreb"))).strftime("%d.%m. u %H:%M")
-
-
-# ---------------------------------------------------------------- publish
-def cmd_publish(issue: int, at: str = "") -> None:
-    info = json.loads(gh("issue", "view", str(issue), "--json", "body"))
-    d = read_json_marker(info.get("body") or "", "CLIPDATA") or {}
-    with use_campaign(clip_campaign(d)):
-        _publish(issue, at)
-
-
-def _parse_at(at: str):
-    """'21:30' (danas/sutra po našem vremenu) → datetime."""
-    from datetime import datetime, timedelta
-    from zoneinfo import ZoneInfo
-    tz = ZoneInfo(CFG.get("timezone", "Europe/Zagreb"))
-    hh, mm = (int(x) for x in at.strip().split(":"))
-    now = datetime.now(tz)
-    slot = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
-    if slot < now + timedelta(minutes=5):
-        slot += timedelta(days=1)
-    return slot
-
-
-def _publish(issue: int, at: str = "") -> None:
-    from . import buffer
-
-    info = json.loads(gh("issue", "view", str(issue), "--json", "body,labels"))
-    labels = {l["name"] for l in info["labels"]}
-    if L_POSTED in labels:
-        print("Već objavljeno, preskačem.")
-        return
-    data = read_json_marker(info["body"], "CLIPDATA")
-    if not data:
-        comment(issue, "⚠️ U ovom Issueu nema podataka o klipu, ne mogu objaviti.")
-        return
-    if int(issue) in {int(x) for x in (CFG.get("preskoci") or [])}:
-        comment(issue, "⛔ Ovaj klip nije prošao provjeru prema briefu kampanje – ne objavljujem.")
-        return
-    # ručno napisan opis (config "opisi") ima prednost pred automatskim hookom
-    custom = (CFG.get("opisi") or {}).get(int(issue)) or (CFG.get("opisi") or {}).get(str(issue))
-    if custom:
-        tags = str(CFG.get("hashtags", "") or "").strip()
-        data["caption"] = CFG["caption_template"].format(hook=custom, hashtags=tags).strip()
-        data["yt_title"] = CFG["youtube_title_template"].format(hook=custom, hashtags=tags)[:100]
-
-    # hook naslov na vrhu videa (config "naslovi") – dodaje se jednom, prije prve objave
-    hook = (CFG.get("naslovi") or {}).get(int(issue)) or (CFG.get("naslovi") or {}).get(str(issue))
-    if hook and not data.get("overlay"):
-        from . import hosting, overlay
-        print(f"▶ Dodajem naslov na video: {hook}", flush=True)
-        out = overlay.add_hook(data["video_url"], hook, ROOT / "work", f"hook-{issue}",
-                              str(data.get("izgled", "blur")))
-        new_url = hosting.upload(out, f"hook-{issue}-{int(time.time())}")
-        body = info["body"].replace(data["video_url"], new_url)
-        saved = dict(read_json_marker(body, "CLIPDATA") or {})
-        saved.update({"video_url": new_url, "overlay": True})
-        body = re.sub(r"<!--CLIPDATA\s*\{.*?\}\s*-->",
-                      lambda _: f"<!--CLIPDATA {json.dumps(saved, ensure_ascii=False)} -->", body, flags=re.S)
-        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-            f.write(body)
-        gh("issue", "edit", str(issue), "--body-file", f.name)
-        data["video_url"] = new_url
-        out.unlink(missing_ok=True)
-
-    mode = CFG.get("post_mode", "shareNow")
-    try:
-        channels = buffer.get_channels(CFG["platforms"])
-    except Exception as e:
-        comment(issue, f"❌ Ne mogu se spojiti na Buffer: {e}")
-        raise
-    if channels and CFG.get("jedna_platforma"):
-        # kampanja ne dopušta isti video na više računa → svaki klip ide na jednu mrežu (naizmjence)
-        channels = sorted(channels, key=lambda c: c["service"])
-        channels = [channels[int(issue) % len(channels)]]
-    if not channels:
-        comment(issue, f"❌ U Bufferu nema povezanih kanala za: {', '.join(CFG['platforms'])}.")
-        sys.exit(1)
-
-    slot = None
-    if at:
-        slot = _parse_at(at)
-    elif mode == "schedule":
-        taken = [_parse_iso(p["dueAt"]) for ch in channels for p in buffer.scheduled_posts(ch["id"])]
-        slot = next_slot(taken)
-    done, lines = {}, []
-    for ch in channels:
-        try:
-            due = None
-            when = "poslano u Buffer"
-            if slot is not None:
-                due = _utc_iso(slot)
-                when = f"zakazano za {_local(slot)}"
-            post = buffer.create_video_post(ch, data["caption"], data["video_url"], data["yt_title"],
-                                            mode, due_at=due)
-            done[post["id"]] = ch["service"]
-            lines.append(f"- ✅ **{ch['service']}** ({ch['name']}): {when}")
-        except Exception as e:
-            lines.append(f"- ❌ **{ch['service']}** ({ch['name']}): {e}")
-    marker = json.dumps({"posts": done})
-    comment(issue, "### Objava\n" + "\n".join(lines)
-            + "\n\nLinkove objava skupit ću sam unutar sat vremena i staviti ih u Issue **"
-            + TRACKER_TITLE + f"**.\n\n<!--BUFFER_POSTS {marker} -->")
-    if done:
-        gh("issue", "edit", str(issue), "--add-label", L_POSTED)
-    else:
-        sys.exit(1)
-
-
-# ---------------------------------------------------------------- daily
 def owner_mention() -> str:
     owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "")
     return f"@{owner} " if owner else ""
 
 
-def cmd_daily() -> None:
-    """Svaki dan: dopuni Buffer red do `daily_posts` objava najboljim neobjavljenim klipovima."""
-    from datetime import date
-    from . import buffer
-
-    want = int(CFG.get("daily_posts", 3) or 0)
-    channels = buffer.get_channels(CFG["platforms"])
-    if not channels or want <= 0:
-        print("Nema kanala ili je daily_posts = 0.")
-        return
-    waiting = max(len(buffer.scheduled_posts(ch["id"])) for ch in channels)
-    need = max(0, want - waiting)
-    print(f"▶ U Bufferu već čeka {waiting} objava po kanalu, cilj je {want} → objavljujem {need}.")
-    if need == 0:
-        return
-
-    issues = json.loads(gh("issue", "list", "--state", "open", "--label", L_CLIP, "--limit", "200",
-                           "--json", "number,title,body,labels"))
-    tags = str(CFG.get("hashtags", "") or "").strip()
-    skip = {int(x) for x in (CFG.get("preskoci") or [])}
-    reviewed = {int(x) for x in (CFG.get("opisi") or {})}
-    cands = []
-    for i in issues:
-        names = {l["name"] for l in i["labels"]}
-        if L_POSTED in names or i["number"] in skip:
-            continue
-        d = read_json_marker(i.get("body") or "", "CLIPDATA")
-        # samo provjereni klipovi: ručni opis u configu ILI ih je odabrao i ocijenio AI
-        if CFG.get("samo_provjereni") and i["number"] not in reviewed and not (d and d.get("ai")):
-            continue
-        # samo klipovi kampanja koje još traju (stari klipovi bez oznake = zadana kampanja)
-        camp = clip_campaign(d) if ((d or {}).get("kampanja") or not tags
-                                    or tags in (d or {}).get("caption", "")) else "__stara__"
-        if d and not campaign_active(camp):
-            continue
-        # config "objavljuj_kampanje": ako je zadano, objavljuju se samo klipovi tih kampanja
-        only_c = CFG.get("objavljuj_kampanje") or []
-        if d and only_c and camp not in only_c:
-            continue
-        if d:
-            cands.append((float(d.get("score", 0)), i["number"], i["title"]))
-    cands.sort(reverse=True)  # AI klipovi: najbolja ocjena prva
-    # ručno složeni redoslijed iz config "opisi" ide ispred AI klipova
-    order = [int(x) for x in (CFG.get("opisi") or {})]
-    cands.sort(key=lambda c: order.index(c[1]) if c[1] in order else 10**6)
-
-    from datetime import datetime as _dt
-    from zoneinfo import ZoneInfo as _Z
-    warn_now = _dt.now(_Z(CFG.get("timezone", "Europe/Zagreb"))).hour == 17
-    if not cands:
-        if not warn_now:
-            print("Nema provjerenih neobjavljenih klipova.")
-            return
-        tracker = tracker_issue()
-        comment(tracker, f"{owner_mention()}⚠️ **Ponestalo je klipova** – nakon onih u Bufferu nema više objava. "
-                         + _refill_hint())
-        print("Nema neobjavljenih klipova – poslana obavijest.")
-        return
-
-    for score, num, title in cands[:need]:
-        print(f"  → #{num} (ocjena {score:.1f}) {title}")
-        try:
-            gh("issue", "edit", str(num), "--add-label", L_APPROVE)
-            cmd_publish(num)
-        except (Exception, SystemExit) as e:
-            import traceback
-            tb = traceback.format_exc().strip().splitlines()[-6:]
-            print(f"::error::#{num} nije objavljen: {e!r} | " + " / ".join(x.strip() for x in tb))
-
-    left = len(cands) - min(need, len(cands))
-    per_day = max(len(CFG.get("post_times") or []), 1)
-    total = waiting + min(need, len(cands)) + left
-    days = total / per_day
-    if days <= float(CFG.get("upozori_dana", 2)) and warn_now:
-        tracker = tracker_issue()
-        comment(tracker, f"{owner_mention()}⏰ **Klipova ima još za ~{days:.0f} dan(a)** "
-                         f"({total} ukupno: u Bufferu i u redu). " + _refill_hint())
-
-
-def _yt_campaigns() -> list[str]:
-    return [k for k, v in (BASE_CFG.get("kampanje") or {}).items()
-            if (v or {}).get("youtube_kanal") and campaign_active(k)]
-
-
-def _refill_hint() -> str:
-    return ('Skini novi MrBeast / Financial Audit video (**SKINI.bat**), stavi ga na Google Drive '
-            '(javni link) i pošalji link Claudeu – ili ga sam ubaci u **"1. Napravi klipove"** '
-            '(kampanja: `mrbeast` ili `financial_audit`).')
-
-
-# ---------------------------------------------------------------- YouTube plan
-def _yt_stock(key: str, issues: list[dict]) -> int:
-    skip = {int(x) for x in (BASE_CFG.get("preskoci") or [])}
-    opisi = {int(x) for x in (BASE_CFG.get("opisi") or {})}
-    stock = 0
-    for i in issues:
-        names = {l["name"] for l in i["labels"]}
-        d = read_json_marker(i.get("body") or "", "CLIPDATA") or {}
-        if L_POSTED in names or i["number"] in skip or d.get("kampanja") != key:
-            continue
-        if d.get("ai") or i["number"] in opisi:
-            stock += 1
-    return stock
-
-
-def cmd_ytplan(kampanja: str, force: int = 0) -> None:
-    """Za YouTube kampanje (MrBeast, Financial Audit): treba li skinuti nove videe i koje već imamo.
-    Bez --kampanja bira kanal kojem je zaliha najmanja (izmjenjuju se).
-    Ispisuje u GITHUB_OUTPUT: broj (koliko videa skinuti), koristeni (ID-evi), kanal."""
-    used_ids = sorted({n[:11] for n in used_ranges() if re.match(r"^[\w-]{11}_", n)})
-    try:
-        issues = json.loads(gh("issue", "list", "--state", "open", "--label", L_CLIP, "--limit", "500",
-                               "--json", "number,body,labels"))
-    except Exception:
-        issues = []
-    only_c = BASE_CFG.get("objavljuj_kampanje") or []
-    kands = [k for k in _yt_campaigns() if not only_c or k in only_c] or [default_campaign()]
-    if kampanja:
-        key = kampanja
-    else:
-        def ratio(k: str) -> float:
-            return _yt_stock(k, issues) / max(int(campaign_cfg(k).get("zaliha_klipova", 15)), 1)
-        key = min(kands, key=ratio)
-        for k in kands:
-            print(f"::notice::{k}: na zalihi {_yt_stock(k, issues)} klipova")
-    c = campaign_cfg(key)
-    stock = _yt_stock(key, issues)
-    want = int(c.get("zaliha_klipova", 15))
-    per_video = max(int(c.get("auto_klipova", c.get("clips_per_video", 8))), 1)
-    n = force or (0 if stock >= want else min(int(c.get("max_videa_dnevno", 2)),
-                                                -(-(want - stock) // per_video)))
-    print(f"::notice::{key}: na zalihi {stock} klipova (cilj {want}) → skidam {n} novih videa. "
-          f"Već iskorišteno {len(used_ids)} videa.")
-    out = os.environ.get("GITHUB_OUTPUT")
-    if out:
-        with open(out, "a", encoding="utf-8") as f:
-            f.write(f"broj={n}\nkoristeni={','.join(used_ids)}\nkanal={c['youtube_kanal']}\n"
-                    f"min_trajanje={int(c.get('min_minuta_videa', 8)) * 60}\nkampanja={key}\n")
-
-
-# ---------------------------------------------------------------- reschedule
-def cmd_reschedule() -> None:
-    """Sve objave koje čekaju u Bufferu presloži na termine iz config post_times."""
-    from . import buffer
-
-    for ch in buffer.get_channels(CFG["platforms"]):
-        posts = buffer.scheduled_posts(ch["id"])
-        print(f"▶ {ch['service']} ({ch['name']}): {len(posts)} objava čeka")
-        import random
-        rng = random.Random(2026)  # isti niz za svaki kanal → ista vremena na TikToku i Instagramu
-        taken: list = []
-        for p in sorted(posts, key=lambda x: x["dueAt"]):
-            slot = next_slot(taken, rng)
-            taken.append(slot)
-            old = _local(_parse_iso(p["dueAt"]))
-            try:
-                buffer.set_post_time(p, ch["service"], _utc_iso(slot))
-                print(f"::notice::{ch['service']}: {old} → {_local(slot)}   {p['text'][:40]!r}")
-            except Exception as e:
-                print(f"   ⚠️ {p['text'][:50]!r}: {e}")
-    print("✅ Gotovo.")
-
-
-# ---------------------------------------------------------------- links
 def tracker_issue() -> int:
-    found = json.loads(gh("issue", "list", "--state", "open", "--search", f'in:title "{TRACKER_TITLE}"',
-                          "--json", "number,title"))
+    """Pinani Issue u koji idu obavijesti (stari "Linkovi za Vyro" se preimenuje)."""
+    found = json.loads(gh("issue", "list", "--state", "open", "--limit", "100", "--json", "number,title"))
     for i in found:
         if i["title"] == TRACKER_TITLE:
             return i["number"]
-    body = ("Ovdje se skupljaju linkovi svih objavljenih klipova.\n\n"
-            "Svaki link predaj na **vyro.com** → tvoja MrBeast kampanja → **Submit Post**.\n"
-            "Predaj ih što prije: pregledi se broje tek od predaje, a budžet kampanje se brzo potroši.\n")
+    body = ("Ovdje stižu obavijesti clippera: 🔔 objavljen klip (s linkom), 🚀 pregledi, ❌ greške.\n"
+            "Postavke su u `config.json`.\n")
+    for i in found:
+        if i["title"] in OLD_TRACKER_TITLES:
+            gh("issue", "edit", str(i["number"]), "--title", TRACKER_TITLE, "--body", body)
+            return i["number"]
     url = gh("issue", "create", "--title", TRACKER_TITLE, "--body", body)
     num = int(url.rstrip("/").split("/")[-1])
     subprocess.run(["gh", "issue", "pin", str(num)], capture_output=True)
     return num
 
 
-def cmd_links() -> None:
-    from . import buffer
+def notify(body: str) -> None:
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
+        f.write(body)
+    gh("issue", "comment", str(tracker_issue()), "--body-file", f.name)
 
-    ensure_labels()
-    issues = json.loads(gh("issue", "list", "--state", "all", "--label", L_POSTED, "--limit", "100",
-                           "--json", "number,title,labels"))
-    pending = [i for i in issues if L_LINKS not in {l["name"] for l in i["labels"]}]
-    if not pending:
-        print("Nema novih objava.")
-        return
-    tracker = None
-    for iss in pending:
-        n = iss["number"]
-        comments = json.loads(gh("issue", "view", str(n), "--json", "comments"))["comments"]
-        posts = {}
-        for c in comments:
-            m = read_json_marker(c["body"], "BUFFER_POSTS")
-            if m:  # vrijedi samo zadnja objava (starije su možda maknute u Drafts i vraćene u red)
-                posts = dict(m["posts"])
-        results, finished = [], True
-        for pid, service in posts.items():
-            try:
-                p = buffer.get_post(pid)
-            except Exception as e:
-                results.append(f"- {service}: ne mogu provjeriti ({e})")
-                continue
-            if p.get("externalLink"):
-                results.append(f"- **{service}**: {p['externalLink']}")
-            elif str(p["status"]).lower() == "error" or p.get("error"):
-                msg = (p.get("error") or {}).get("message", "nepoznata greška")
-                results.append(f"- ❌ **{service}**: objava nije uspjela – {msg}")
-            elif str(p["status"]).lower() == "sent":
-                results.append(f"- **{service}**: objavljeno, ali Buffer nije vratio link – "
-                               "kopiraj ga iz aplikacije")
-            else:
-                finished = False
-        if not finished:
-            print(f"#{n}: još se objavljuje, provjerit ću kasnije.")
+
+# ---------------------------------------------------------------- termini
+def _slots_around(now: datetime) -> list[datetime]:
+    out = []
+    for day in (-1, 0, 1, 2):
+        d = (now + timedelta(days=day)).date()
+        for t in CFG["termini"]:
+            hh, mm = (int(x) for x in t.split(":"))
+            out.append(datetime(d.year, d.month, d.day, hh, mm, tzinfo=TZ))
+    return sorted(out)
+
+
+def slot_key(slot: datetime) -> str:
+    return slot.strftime("%Y-%m-%d %H:%M")
+
+
+def due_time(slot: datetime, now: datetime) -> datetime:
+    """Termin + nasumičan pomak (isti dan + termin → uvijek isti pomak), najranije za 10 min."""
+    jit = int(CFG.get("pomak_minuta", 0) or 0)
+    due = slot + timedelta(minutes=random.Random(slot_key(slot)).randint(-jit, jit))
+    return max(due, now + timedelta(minutes=10)).replace(second=0, microsecond=0)
+
+
+def cmd_gate(manual: bool) -> None:
+    """Zakazani run: termin koji je za 0-75 min (ili do 20 min prošao, ako GitHub kasni).
+    Ručni run: sljedeći slobodan termin. Ispisuje termin u GITHUB_OUTPUT (prazno = ništa)."""
+    now = datetime.now(TZ)
+    taken = {e.get("termin") for e in load_state()["objavljeno"]}
+    pick = ""
+    for s in _slots_around(now):
+        if slot_key(s) in taken:
             continue
-        text = "\n".join(results) or "- (nema objava)"
-        comment(n, "### 🔗 Linkovi za Vyro\n" + text)
-        tracker = tracker or tracker_issue()
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-        hour = datetime.now(ZoneInfo(CFG.get("timezone", "Europe/Zagreb"))).hour
-        warm = ""
-        if 18 <= hour < 20:  # prva objava dana → podsjetnik za zagrijavanje računa
-            repo = os.environ.get("GITHUB_REPOSITORY", "")
-            warm = ("\n\n🔥 **Sad je vrijeme za 15 min na TikToku** (skrolanje u niši + odgovori na komentare) – "
-                    f"[upute](https://github.com/{repo}/blob/main/ZAGRIJAVANJE.md)")
-        ping = owner_mention() if CFG.get("obavijest_za_svaku_objavu", False) else ""
-        comment(tracker, f"{ping}🔔 **Objavljeno: {iss['title']}** (#{n})\n{text}\n\n"
-                         "Predaj TikTok link na Vyro → kampanja → **Submit Post** (ako imaš slobodno mjesto)." + warm)
-        gh("issue", "edit", str(n), "--add-label", L_LINKS)
-        gh("issue", "close", str(n))
-        print(f"#{n}: linkovi skupljeni.")
+        diff = (s - now).total_seconds() / 60
+        if (manual and diff > 5) or (-20 <= diff <= 75):
+            pick = slot_key(s)
+            break
+    print(f"Sad je {now:%d.%m. %H:%M} → termin: {pick or 'nijedan (ništa ne radim)'}")
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a", encoding="utf-8") as f:
+            f.write(f"termin={pick}\n")
 
 
-# ---------------------------------------------------------------- auto (nove epizode)
-def _frameio_videos(cfg_share, min_min: int, skip: str) -> list[dict]:
-    """frameio_mapa može biti jedan link ili popis linkova (više mapa iste kampanje)."""
-    from . import frameio
-    shares = cfg_share if isinstance(cfg_share, list) else [cfg_share]
-    out: list[dict] = []
-    for sh in shares:
-        sh = str(sh or "").strip()
-        if sh:
-            out += frameio.list_videos(sh, min_min, skip)
+# ---------------------------------------------------------------- odabir klipova
+def _blocked(title: str) -> bool:
+    words = set(re.findall(r"[a-z]+", title.lower()))
+    return bool(words & {w.lower() for w in CFG.get("blokirane_rijeci") or []})
+
+
+def candidates(streamer: dict, posted_ids: set[str]) -> list[dict]:
+    from . import twitch
+    from .render import clean_title
+
+    clips = twitch.top_clips(streamer["login"], int(CFG.get("dana_unazad", 7)))
+    lang = str(CFG.get("jezik", "en")).lower()
+    lo, hi = float(CFG.get("min_sekundi", 10)), float(CFG.get("max_sekundi", 60))
+    out, why = [], {}
+    for c in clips:
+        reason = None
+        if c["id"] in posted_ids:
+            reason = "već objavljen"
+        elif not (lo <= float(c.get("duration") or 0) <= hi):
+            reason = "trajanje"
+        elif not str(c.get("language") or "").lower().startswith(lang):
+            reason = "jezik"
+        elif int(c.get("view_count") or 0) < int(streamer.get("min_pregleda", 0)):
+            reason = "premalo pregleda"
+        elif _blocked(c.get("title") or ""):
+            reason = "zabranjena riječ u naslovu"
+        elif not clean_title(c.get("title") or "", int(CFG.get("hook_max_rijeci", 6))):
+            reason = "naslov neupotrebljiv za hook"
+        if reason:
+            why[reason] = why.get(reason, 0) + 1
+            continue
+        c["_streamer"] = streamer
+        out.append(c)
+    print(f"▶ {streamer['login']}: {len(clips)} klipova u zadnjih {CFG.get('dana_unazad', 7)} dana, "
+          f"{len(out)} prolazi filtere. Odbijeno: {why or '-'}", flush=True)
     return out
 
 
-def cmd_auto(dry: bool = False, again: bool = False, only: str | None = None) -> None:
-    """Za svaku aktivnu kampanju pogledaj njezinu Frame.io mapu i napravi klipove iz novih epizoda."""
-    from . import frameio
+# ---------------------------------------------------------------- izrada videa
+def make_video(clip: dict, workdir: Path) -> tuple[Path, str]:
+    """Skini + titlovi + montaža. Vraća (gotov mp4, hook tekst)."""
+    from . import render, transcribe, twitch
 
-    done = set(used_ranges().keys())
-    norm = lambda n: re.sub(r"[^\w.-]", "_", n)  # noqa: E731
-    for key in (BASE_CFG.get("kampanje") or {}):
-        if only and key != only:
-            continue
-        if not campaign_active(key):
-            print(f"::notice::{key}: kampanja je završila, preskačem.")
-            continue
-        with use_campaign(key):
-            share = CFG.get("frameio_mapa")
-            if not share:
-                continue
-            try:
-                vids = _frameio_videos(share, int(CFG.get("min_minuta_epizode", 10)),
-                                       str(CFG.get("preskoci_datoteke") or ""))
-            except Exception as e:  # noqa: BLE001
-                print(f"::error::{key}: ne mogu pročitati Frame.io mapu ({e})")
-                continue
-            # again = još klipova i iz već obrađenih epizoda (iskorišteni trenuci se preskaču sami)
-            new = list(vids) if again else [v for v in vids if norm(v["name"]) not in done]
-            for v in vids:
-                state = "NOVA" if v in new else "već obrađena"
-                print(f"::notice::{key}: {v['name']} ({v['seconds'] // 60} min): {state}")
-            if not new or dry:
-                continue
-            tracker = tracker_issue()
-            names = ", ".join(v["name"] for v in new)
-            if not again:
-                comment(tracker, f"{owner_mention()}🆕 **{CFG.get('naziv', key)} – nove epizode:** {names}\n\n"
-                                 "Radim klipove. Kad budu gotovi, Claude ih provjeri prije objave.")
-        if campaign_cfg(key).get("gotovi_klipovi"):
-            cmd_make_premade(" ".join(v["url"] for v in new), kampanja=key)
-        else:
-            cmd_make(" ".join(v["url"] for v in new), 1, "", int(campaign_cfg(key).get("auto_klipova", 10)),
-                     kampanja=key)
-
-# ---------------------------------------------------------------- probe
-def cmd_probe(kampanja: str) -> None:
-    """Ispiši audio/video tragove epizoda iz Frame.io mape (dijagnostika)."""
-    from . import frameio
-    with use_campaign(kampanja):
-        vids = _frameio_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
-                                   str(CFG.get("preskoci_datoteke") or ""))
-    for v in vids[:1]:
-        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
-                              "stream=index,codec_type,codec_name,channels,channel_layout:stream_tags=title,handler_name",
-                              "-of", "compact", v["url"]], capture_output=True, text=True, timeout=300)
-        n_audio = sum(1 for l in out.stdout.splitlines() if "codec_type=audio" in l)
-        print(f"::notice::{v['name']}: {n_audio} audio tragova")
-        for k in range(n_audio):
-            r = subprocess.run(["ffmpeg", "-hide_banner", "-ss", "600", "-t", "90", "-i", v["url"],
-                                "-map", f"0:a:{k}", "-af", "volumedetect", "-f", "null", "-"],
-                               capture_output=True, text=True, timeout=600)
-            mean = re.search(r"mean_volume: (\S+) dB", r.stderr)
-            mx = re.search(r"max_volume: (\S+) dB", r.stderr)
-            print(f"::notice::trag {k}: prosjek {mean.group(1) if mean else '?'} dB, max {mx.group(1) if mx else '?'} dB")
-
-
-# ---------------------------------------------------------------- rerender
-def cmd_rerender(only: list[int] | None = None) -> None:
-    """Ponovo izrenderiraj neobjavljene klipove u trenutnom izgledu (config "izgled") s hook naslovom.
-    Izvorne epizode skida sam iz Frame.io mape kampanje."""
-    import shutil
-    from . import fetch, frameio, hosting, render, transcribe
-    from .highlights import Clip
-
-    layout = str(BASE_CFG.get("izgled", "full"))
-    issues = json.loads(gh("issue", "list", "--state", "open", "--label", L_CLIP, "--limit", "300",
-                           "--json", "number,title,body,labels"))
-    skip = {int(x) for x in (BASE_CFG.get("preskoci") or [])}
-    reviewed = {int(x) for x in (BASE_CFG.get("opisi") or {})}
-    groups: dict[tuple[str, str], list[tuple[dict, dict]]] = {}
-    for i in issues:
-        n = i["number"]
-        names = {l["name"] for l in i["labels"]}
-        d = read_json_marker(i.get("body") or "", "CLIPDATA")
-        ver = int(BASE_CFG.get("izgled_verzija", 1))
-        if not d or n in skip or L_LINKS in names or (d.get("izgled") == layout and int(d.get("v", 1)) >= ver):
-            continue
-        if only and n not in only:
-            continue
-        if not only and n not in reviewed and not d.get("ai"):
-            continue
-        camp = clip_campaign(d)
-        if not campaign_active(camp):
-            continue
-        groups.setdefault((camp, d["source"]), []).append((i, d))
-    print(f"::notice::Za ponovni render: {sum(len(v) for v in groups.values())} klipova iz {len(groups)} epizoda")
-
-    norm = lambda n: re.sub(r"[^\w.-]", "_", n)  # noqa: E731
-    work = ROOT / "work"
-    work.mkdir(exist_ok=True)
-    links: dict[str, dict[str, str]] = {}
-    for (camp, source), items in groups.items():
-        try:
-            _rerender_group(camp, source, items, links, layout, work)
-        except Exception as e:  # noqa: BLE001
-            import traceback
-            tb = " / ".join(x.strip() for x in traceback.format_exc().strip().splitlines()[-6:])
-            print(f"::error::{camp} {source}: {e!r} | {tb}")
-
-
-def _rerender_group(camp, source, items, links, layout, work) -> None:
-    import shutil
-    from . import fetch, frameio, hosting, render, transcribe
-    from .highlights import Clip
-
-    norm = lambda n: re.sub(r"[^\w.-]", "_", n)  # noqa: E731
-    if True:
-        with use_campaign(camp):
-            if camp not in links:
-                vids = _frameio_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
-                                           str(CFG.get("preskoci_datoteke") or ""))
-                links[camp] = {norm(v["name"]): v["url"] for v in vids}
-            url = links[camp].get(source)
-            if not url:  # Frame.io zna ne dati sve linkove iz prve – pokušaj još jednom
-                vids = _frameio_videos(CFG["frameio_mapa"], int(CFG.get("min_minuta_epizode", 10)),
-                                           str(CFG.get("preskoci_datoteke") or ""))
-                links[camp].update({norm(v["name"]): v["url"] for v in vids})
-                url = links[camp].get(source)
-            if not url:
-                print(f"::warning::{camp}: {source} više nije u Frame.io mapi – radim iz već gotovog klipa")
-                for i, d in items:
-                    try:
-                        _rerender_from_clip(i, d, layout, work)
-                    except Exception as e:  # noqa: BLE001
-                        print(f"::error::#{i['number']}: {e!r}")
-                return
-            src = work / "rsrc"
-            shutil.rmtree(src, ignore_errors=True)
-            video = fetch.fetch(url, src, 1)[0]
-            wav = transcribe.extract_audio(video, work / "r.wav", CFG.get("audio_govor"))
-            segs = transcribe.transcribe(wav, CFG.get("whisper_model", "small"))
-            wav.unlink(missing_ok=True)
-            for i, d in items:
-                n = i["number"]
-                hook = ((CFG.get("naslovi") or {}).get(n) or d.get("hook")
-                        or re.sub(r"^\W+\s*", "", i["title"]))
-                clip = Clip(float(d["start"]), float(d["end"]), float(d.get("score", 0)), hook, "")
-                out = work / f"re-{n}.mp4"
-                try:
-                    render.render(video, clip, segs, out, work, show_hook=True,
-                                  audio_mix=CFG.get("audio_mix"), layout=layout, hook_text=hook)
-                    new_url = hosting.upload(out, f"re-{n}-{int(time.time())}")
-                except Exception as e:  # noqa: BLE001
-                    print(f"::error::#{n}: render nije uspio ({e})")
-                    continue
-                body = i["body"].replace(d["video_url"], new_url)
-                old_thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", d["video_url"]).rsplit(".", 1)[0]
-                new_thumb = re.sub(r"/upload/", "/upload/so_2,w_360/", new_url).rsplit(".", 1)[0]
-                body = body.replace(old_thumb, new_thumb)
-                nd = dict(d)
-                nd.update({"video_url": new_url, "izgled": layout, "overlay": True, "hook": hook,
-                           "v": int(BASE_CFG.get("izgled_verzija", 1))})
-                body = re.sub(r"<!--CLIPDATA\s*\{.*?\}\s*-->",
-                              lambda _: f"<!--CLIPDATA {json.dumps(nd, ensure_ascii=False)} -->", body, flags=re.S)
-                with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-                    f.write(body)
-                gh("issue", "edit", str(n), "--body-file", f.name)
-                out.unlink(missing_ok=True)
-                print(f"::notice::#{n} ({source}) → novi izgled: {hook}")
-            shutil.rmtree(src, ignore_errors=True)
-
-
-def _rerender_from_clip(i: dict, d: dict, layout: str, work: Path) -> None:
-    """Kad izvorna epizoda više ne postoji: uzmi srednju (čistu) traku starog klipa,
-    ponovo prepoznaj govor iz njega i složi novi izgled."""
-    import requests
-    from . import hosting, render, transcribe
-    from .highlights import Clip
-
-    n = i["number"]
-    old = work / f"old-{n}.mp4"
-    with requests.get(d["video_url"], stream=True, timeout=120) as r:
-        r.raise_for_status()
-        with open(old, "wb") as f:
-            for ch in r.iter_content(1 << 20):
-                f.write(ch)
-    # u starom izgledu je slika u traci 1080x810 na sredini ekrana (gore/dolje su mutna pozadina i titlovi)
-    band = work / f"band-{n}.mp4"
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(old),
-                    "-vf", f"crop=1080:{render.FG_H}:0:{render.FG_Y}", "-c:v", "libx264", "-preset", "veryfast",
-                    "-crf", "16", "-c:a", "copy", str(band)], check=True)
-    wav = transcribe.extract_audio(band, work / f"band-{n}.wav")
+    st = clip["_streamer"]
+    workdir.mkdir(parents=True, exist_ok=True)
+    print(f"▶ Klip: [{st['login']}] {clip['title']!r} ({clip['view_count']} pregleda, "
+          f"{clip['duration']:.0f} s) {clip['url']}", flush=True)
+    src = twitch.download(clip, workdir / "src.mp4")
+    dur = render.probe_duration(src)
+    wav = transcribe.extract_audio(src, workdir / "audio.wav")
     segs = transcribe.transcribe(wav, CFG.get("whisper_model", "small"))
-    wav.unlink(missing_ok=True)
-    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
-                                "default=nw=1:nk=1", str(band)], capture_output=True, text=True).stdout or 0)
-    hook = ((CFG.get("naslovi") or {}).get(n) or d.get("hook") or re.sub(r"^\W+\s*", "", i["title"]))
-    clip = Clip(0.0, dur, float(d.get("score", 0)), hook, "")
-    out = work / f"re-{n}.mp4"
-    render.render(band, clip, segs, out, work, show_hook=True, layout=layout, hook_text=hook)
-    new_url = hosting.upload(out, f"re-{n}-{int(time.time())}")
-    body = i["body"].replace(d["video_url"], new_url)
-    nd = dict(d)
-    nd.update({"video_url": new_url, "izgled": layout, "overlay": True, "hook": hook,
-               "v": int(BASE_CFG.get("izgled_verzija", 1))})
-    body = re.sub(r"<!--CLIPDATA\s*\{.*?\}\s*-->",
-                  lambda _: f"<!--CLIPDATA {json.dumps(nd, ensure_ascii=False)} -->", body, flags=re.S)
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
-        f.write(body)
-    gh("issue", "edit", str(n), "--body-file", f.name)
-    for x in (old, band, out):
-        x.unlink(missing_ok=True)
-    print(f"::notice::#{n} (iz gotovog klipa) → novi izgled: {hook}")
+    hook = render.clean_title(clip["title"], int(CFG.get("hook_max_rijeci", 6)))
+    layout = "B" if st.get("facecam") else "A"
+    ass = render.build_ass(segs, dur, hook, float(CFG.get("hook_sekundi", 2.8)), layout, workdir / "subs.ass")
+    out = workdir / f"{st['login']}_{clip['id'][:40]}.mp4"
+    render.render(src, ass, out, layout, st.get("facecam"))
+    print(f"   ✅ gotovo: {out.name} ({out.stat().st_size / 1e6:.1f} MB, varijanta {layout}, hook {hook!r})",
+          flush=True)
+    return out, hook
 
 
-# ---------------------------------------------------------------- requeue
-def cmd_requeue(nums: list[int]) -> None:
-    """Vrati klipove u red za objavu (npr. nakon što su stare objave maknute iz Buffera)."""
-    for n in nums:
-        for lab in (L_APPROVE, L_POSTED):
-            subprocess.run(["gh", "issue", "edit", str(n), "--remove-label", lab], capture_output=True)
-        subprocess.run(["gh", "issue", "reopen", str(n)], capture_output=True)
-        comment(n, "↩️ Vraćeno u red za objavu (stara objava maknuta iz Buffera).")
-        print(f"#{n}: vraćen u red")
+def caption(clip: dict, hook: str) -> str:
+    st = clip["_streamer"]
+    h = hook if hook != hook.lower() else hook[:1].upper() + hook[1:]
+    return CFG["opis_posta"].format(hook=h, login=st["login"], ime=st.get("ime", st["login"]),
+                                    hashtagovi=st.get("hashtagovi", "")).strip()
 
 
-# ---------------------------------------------------------------- views
+# ---------------------------------------------------------------- run
+def cmd_run(termin: str, test: int) -> None:
+    state = load_state()
+    posted_ids = {e["id"] for e in state["objavljeno"]}
+    per_streamer, api_errors = [], []
+    for st in CFG["streameri"]:
+        try:
+            per_streamer.append(candidates(st, posted_ids))
+        except Exception as e:  # Twitch greška za jednog streamera – probaj ostale
+            print(f"::warning::{st['login']}: {e}")
+            api_errors.append(f"{st['login']}: {e}")
+            per_streamer.append([])
+    if api_errors and not any(per_streamer):
+        raise RuntimeError("Twitch API greška:\n" + "\n".join(api_errors))
+
+    if test:
+        return _run_test(per_streamer, test)
+
+    queue = [c for lst in per_streamer for c in lst]   # prvo glavni streamer, pa rezerva
+    if not queue:
+        raise RuntimeError("Nema nijednog klipa koji prolazi filtere (svi streameri, zadnjih "
+                           f"{CFG.get('dana_unazad', 7)} dana).")
+    now = datetime.now(TZ)
+    slot = datetime.strptime(termin, "%Y-%m-%d %H:%M").replace(tzinfo=TZ)
+    if termin in {e.get("termin") for e in state["objavljeno"]}:
+        print(f"Termin {termin} već ima objavu – ništa ne radim.")
+        return
+    errors = []
+    for clip in queue[:3]:   # ako montaža jednog klipa pukne, probaj sljedeći
+        try:
+            video, hook = make_video(clip, WORK / clip["id"][:40])
+        except Exception as e:
+            errors.append(f"{clip['url']}: {e}")
+            print(f"::warning::Klip nije uspio: {e}")
+            continue
+        return _publish(clip, video, hook, slot, now, state)
+    raise RuntimeError("Montaža nije uspjela ni za jedan klip:\n" + "\n".join(errors))
+
+
+def _run_test(per_streamer: list[list[dict]], n: int) -> None:
+    """Test: N videa bez objave. Ako ima rezervnog streamera, zadnji video je njegov (da se vide obje varijante)."""
+    picks = per_streamer[0][: n - 1] if len(per_streamer) > 1 and per_streamer[1] else per_streamer[0][:n]
+    for lst in per_streamer[1:]:
+        picks += lst[: n - len(picks)]
+    picks += [c for c in per_streamer[0] if c not in picks][: n - len(picks)]
+    if not picks:
+        raise RuntimeError("Nema nijednog klipa koji prolazi filtere.")
+    out_dir = ROOT / "out"
+    out_dir.mkdir(exist_ok=True)
+    summary = []
+    for k, clip in enumerate(picks, 1):
+        video, hook = make_video(clip, WORK / clip["id"][:40])
+        dest = out_dir / f"{k}_{video.name}"
+        video.replace(dest)
+        summary.append(f"=== {dest.name}\nTwitch: {clip['url']} ({clip['view_count']} pregleda)\n"
+                       f"Opis posta:\n{caption(clip, hook)}\n")
+    (out_dir / "opisi.txt").write_text("\n".join(summary), encoding="utf-8")
+    print("\n".join(summary))
+
+
+def _publish(clip: dict, video: Path, hook: str, slot: datetime, now: datetime, state: dict) -> None:
+    from . import buffer, hosting
+
+    st = clip["_streamer"]
+    text = caption(clip, hook)
+    url = hosting.upload(video, f"{st['login']}-{clip['id'][:60]}")
+    due = due_time(slot, now)
+    channels = buffer.get_channels(CFG["platforme"])
+    if not channels:
+        raise RuntimeError(f"U Bufferu nema povezanih kanala za: {', '.join(CFG['platforme'])}.")
+    posts, errs = {}, []
+    for ch in channels:
+        try:
+            p = buffer.create_video_post(ch, text, url, hook or st.get("ime", ""), "customScheduled",
+                                         due_at=due.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
+            posts[p["id"]] = ch["service"]
+            print(f"::notice::{ch['service']} ({ch['name']}): zakazano za {due:%d.%m. %H:%M}")
+        except Exception as e:
+            errs.append(f"{ch['service']}: {e}")
+    if not posts:
+        raise RuntimeError("Buffer nije prihvatio objavu: " + "; ".join(errs))
+    state["objavljeno"].append({
+        "id": clip["id"], "streamer": st["login"], "naslov": clip["title"], "hook": hook,
+        "twitch": clip["url"], "pregleda_twitch": clip["view_count"], "termin": slot_key(slot),
+        "zakazano": due.isoformat(), "video": url, "buffer": posts, "link": None,
+        "obavijest": False, "pregledi_obavijesti": [],
+    })
+    save_state(state)
+    if errs:
+        print("::warning::" + "; ".join(errs))
+
+
+# ---------------------------------------------------------------- links / pregledi
 def _tiktok_views(url: str) -> int | None:
-    """Broj pregleda TikTok videa (yt-dlp, a ako ne uspije – iz HTML-a stranice)."""
     try:
         res = subprocess.run(["yt-dlp", "--dump-single-json", "--skip-download", "--no-warnings", url],
                              capture_output=True, text=True, timeout=90)
@@ -1036,169 +293,148 @@ def _tiktok_views(url: str) -> int | None:
                 return int(v)
     except Exception:
         pass
-    try:
-        import requests
-        html = requests.get(url, timeout=30, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9"}).text
-        m = re.search(r'"playCount":\s*"?(\d+)', html)
-        if m:
-            return int(m.group(1))
-    except Exception:
-        pass
     return None
 
 
-def cmd_views() -> None:
-    """Javi (s @mention) kad TikTok objava prijeđe pragove pregleda iz config "obavijest_pregledi"."""
-    from datetime import datetime, timedelta, timezone
-
-    limits = sorted(int(x) for x in (CFG.get("obavijest_pregledi") or [1000, 5000]))
-    days = int(CFG.get("prati_dana", 7))
-    since = datetime.now(timezone.utc) - timedelta(days=days)
-    issues = json.loads(gh("issue", "list", "--state", "all", "--label", L_LINKS, "--limit", "100",
-                           "--json", "number,title,closedAt,createdAt"))
-    tracker = None
-    for iss in issues:
-        when = iss.get("closedAt") or iss.get("createdAt")
-        if when and datetime.fromisoformat(when.replace("Z", "+00:00")) < since:
-            continue
-        n = iss["number"]
-        comments = json.loads(gh("issue", "view", str(n), "--json", "comments"))["comments"]
-        url, done = None, set()
-        for c in comments:
-            m = re.search(r"https://(?:www\.|vm\.)?tiktok\.com/\S+", c["body"])
-            if m and "Linkovi za Vyro" in c["body"]:
-                url = m.group(0).rstrip(").,")
-            mk = read_json_marker(c["body"], "VIEWS")
-            if mk:
-                done.update(int(x) for x in mk.get("done", []))
-        if not url:
-            continue
-        views = _tiktok_views(url)
-        if views is None:
-            print(f"::warning::#{n}: ne mogu dohvatiti preglede ({url})")
-            continue
-        new = [l for l in limits if views >= l and l not in done]
-        print(f"::notice::#{n}: {views} pregleda" + (f" → obavijest za {new}" if new else ""))
-        if not new:
-            continue
-        top = max(new)
-        done.update(new)
-        comment(n, f"📈 TikTok: **{views:,}** pregleda\n\n<!--VIEWS {json.dumps({'done': sorted(done)})} -->")
-        tracker = tracker or tracker_issue()
-        extra = ("Ako ga još nisi predao na Vyro – **predaj odmah**." if top < 5000
-                 else "Prešao je 5.000 – Vyro bi ga sad trebao odobriti ako je predan.")
-        comment(tracker, f"{owner_mention()}🚀 **TikTok klip je prešao {top:,} pregleda** "
-                         f"({views:,}) – {iss['title']} (#{n})\n{url}\n\n{extra}")
-
-
-# ---------------------------------------------------------------- check
-def cmd_check() -> None:
+def cmd_links() -> None:
     from . import buffer
 
+    state = load_state()
+    changed = False
+    for e in state["objavljeno"]:
+        if e.get("obavijest"):
+            continue
+        lines, finished = [], True
+        for pid, service in (e.get("buffer") or {}).items():
+            try:
+                p = buffer.get_post(pid)
+            except Exception as ex:
+                lines.append(f"- {service}: ne mogu provjeriti ({ex})")
+                continue
+            status = str(p.get("status") or "").lower()
+            if p.get("externalLink"):
+                lines.append(f"- **{service}**: {p['externalLink']}")
+                if service.lower() == "tiktok":
+                    e["link"] = p["externalLink"]
+            elif status == "error" or p.get("error"):
+                lines.append(f"- ❌ **{service}**: objava nije uspjela – {(p.get('error') or {}).get('message', '?')}")
+            elif status == "sent":
+                lines.append(f"- **{service}**: objavljeno (Buffer nije vratio link)")
+            else:
+                finished = False
+        if not finished:
+            print(f"{e['id']}: još čeka objavu ({e.get('zakazano')}).")
+            continue
+        failed = any("❌" in l for l in lines)
+        ping = owner_mention() if (failed or CFG.get("obavijest_za_svaku_objavu")) else ""
+        icon = "❌ **Objava nije uspjela**" if failed else "🔔 **Objavljeno**"
+        notify(f"{ping}{icon}: {e.get('hook') or e['naslov']} ({e['streamer']})\n"
+               + "\n".join(lines or ["- (nema objava)"]) + f"\n\nTwitch klip: {e['twitch']}")
+        e["obavijest"] = True
+        changed = True
+
+    limits = sorted(int(x) for x in (CFG.get("obavijest_pregledi") or []))
+    cutoff = datetime.now(TZ) - timedelta(days=int(CFG.get("prati_dana", 7)))
+    for e in state["objavljeno"]:
+        if not e.get("link") or not limits or datetime.fromisoformat(e["zakazano"]) < cutoff:
+            continue
+        views = _tiktok_views(e["link"])
+        if views is None:
+            continue
+        done = set(e.get("pregledi_obavijesti") or [])
+        new = [l for l in limits if views >= l and l not in done]
+        print(f"{e['link']}: {views} pregleda")
+        if new:
+            e["pregledi_obavijesti"] = sorted(done | set(new))
+            notify(f"{owner_mention()}🚀 **TikTok klip je prešao {max(new):,} pregleda** ({views:,}) – "
+                   f"{e.get('hook') or e['naslov']}\n{e['link']}")
+            changed = True
+    if changed:
+        save_state(state)
+
+
+# ---------------------------------------------------------------- check / fail
+def cmd_check() -> None:
+    from . import buffer, twitch
+
     ok = True
+    print("▶ Twitch API...")
+    for st in CFG["streameri"]:
+        try:
+            n = len(twitch.top_clips(st["login"], int(CFG.get("dana_unazad", 7))))
+            print(f"  ✅ {st['login']}: {n} klipova u zadnjih {CFG.get('dana_unazad', 7)} dana")
+        except Exception as e:
+            print(f"  ❌ {st['login']}: {e}")
+            ok = False
     print("▶ Buffer...")
     try:
-        chans = buffer.get_channels(["tiktok", "instagram", "youtube", "facebook", "twitter"])
-        if not chans:
-            print("  ⚠️ Spojen, ali nema povezanih TikTok/Instagram/YouTube kanala.")
-            ok = False
+        chans = buffer.get_channels(CFG["platforme"])
         for c in chans:
-            mark = "✅" if c["service"].lower() in [p.lower() for p in CFG["platforms"]] else "  (ne koristi se)"
-            print(f"  {mark} {c['service']}: {c['name']}")
-        for s in CFG["platforms"]:
-            if s.lower() not in {c["service"].lower() for c in chans}:
-                print(f"  ⚠️ {s} nije povezan u Bufferu – na njega se neće objavljivati.")
-            else:
-                print(f"     {s} postavke objave: {buffer.build_metadata(s, 'Test naslov')}")
+            waiting = buffer.scheduled_posts(c["id"])
+            print(f"  ✅ {c['service']}: {c['name']} – {len(waiting)} objava čeka u redu")
+            for p in waiting:
+                print(f"       {p['dueAt']}  {(p.get('text') or '')[:60]!r}")
+        if not chans:
+            print(f"  ❌ nema povezanih kanala za {CFG['platforme']}")
+            ok = False
     except Exception as e:
         print(f"  ❌ {e}")
         ok = False
     print("▶ Cloudinary...")
-    if os.environ.get("CLOUDINARY_URL", "").startswith("cloudinary://"):
-        try:
-            import cloudinary, cloudinary.api
-            cloudinary.config(secure=True)
-            cloudinary.api.ping()
-            print("  ✅ radi")
-        except Exception as e:
-            print(f"  ❌ {e}")
-            ok = False
-    else:
-        print("  ❌ secret CLOUDINARY_URL nedostaje ili ne počinje s cloudinary://")
+    try:
+        import cloudinary
+        import cloudinary.api
+        cloudinary.config(secure=True)
+        cloudinary.api.ping()
+        print("  ✅ radi")
+    except Exception as e:
+        print(f"  ❌ {e}")
         ok = False
-    print("▶ AI za odabir klipova...")
-    from . import ai
-    if not ai.available():
-        print("  ℹ️ nema secreta GEMINI_API_KEY – klipovi se biraju bez AI-ja (lošije)")
-    else:
-        try:
-            out = ai.parse_json(ai.ask('Answer only with JSON: {"ok": true}', CFG))
-            print(f"  ✅ radi ({ai.provider()})" if out.get("ok") else f"  ⚠️ čudan odgovor: {out}")
-        except Exception as e:
-            print(f"  ❌ {e}")
-            ok = False
     print("\n✅ SVE SPREMNO" if ok else "\n❌ Nešto ne valja – pogledaj gore.")
     sys.exit(0 if ok else 1)
 
 
+def cmd_fail(run_url: str, what: str) -> None:
+    reason = ERROR_FILE.read_text(encoding="utf-8").strip() if ERROR_FILE.exists() else \
+        "greška izvan programa (instalacija, Buffer/Cloudinary, git) – pogledaj log"
+    notify(f"{owner_mention()}❌ **{what} nije uspio**\n\n```\n{reason[-1500:]}\n```\n\nLog: {run_url}")
+
+
+# ---------------------------------------------------------------- main
 def main() -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
-    m = sub.add_parser("make")
-    m.add_argument("--url", required=True)
-    m.add_argument("--max-videos", type=int, default=1)
-    m.add_argument("--hashtags", default="")
-    m.add_argument("--clips", type=int, default=0)
-    m.add_argument("--kampanja", default="")
-    pb = sub.add_parser("publish")
-    pb.add_argument("--issue", type=int, required=True)
-    pb.add_argument("--at", default="")
+    g = sub.add_parser("gate")
+    g.add_argument("--manual", action="store_true")
+    r = sub.add_parser("run")
+    r.add_argument("--termin", default="")
+    r.add_argument("--test", type=int, default=0)
     sub.add_parser("links")
     sub.add_parser("check")
-    sub.add_parser("reschedule")
-    sub.add_parser("daily")
-    sub.add_parser("views")
-    rr = sub.add_parser("rerender")
-    rr.add_argument("--issues", default="")
-    pr = sub.add_parser("probe")
-    pr.add_argument("--kampanja", default="")
-    au = sub.add_parser("auto")
-    au.add_argument("--dry", action="store_true")
-    au.add_argument("--ponovo", action="store_true")
-    au.add_argument("--kampanja", default="")
-    yp = sub.add_parser("ytplan")
-    yp.add_argument("--kampanja", default="")
-    yp.add_argument("--broj", type=int, default=0)
-    rq = sub.add_parser("requeue")
-    rq.add_argument("--issues", default="")
+    f = sub.add_parser("fail")
+    f.add_argument("--run-url", default="")
+    f.add_argument("--what", default="Run")
     a = p.parse_args()
-    if a.cmd == "make":
-        cmd_make(a.url, a.max_videos, a.hashtags, a.clips, a.kampanja or None)
-    elif a.cmd == "daily":
-        cmd_daily()
-    elif a.cmd == "publish":
-        cmd_publish(a.issue, a.at)
-    elif a.cmd == "links":
-        cmd_links()
-    elif a.cmd == "reschedule":
-        cmd_reschedule()
-    elif a.cmd == "views":
-        cmd_views()
-    elif a.cmd == "rerender":
-        cmd_rerender([int(x) for x in re.split(r"[,\s]+", a.issues) if x.strip()] or None)
-    elif a.cmd == "probe":
-        cmd_probe(a.kampanja or None)
-    elif a.cmd == "auto":
-        cmd_auto(a.dry, a.ponovo, a.kampanja or None)
-    elif a.cmd == "ytplan":
-        cmd_ytplan(a.kampanja, a.broj)
-    elif a.cmd == "requeue":
-        cmd_requeue([int(x) for x in re.split(r"[,\s]+", a.issues) if x.strip()])
-    else:
-        cmd_check()
+
+    WORK.mkdir(exist_ok=True)
+    try:
+        if a.cmd == "gate":
+            cmd_gate(a.manual)
+        elif a.cmd == "run":
+            if not a.test and not a.termin:
+                raise SystemExit("Treba --termin ili --test.")
+            cmd_run(a.termin, a.test)
+        elif a.cmd == "links":
+            cmd_links()
+        elif a.cmd == "check":
+            cmd_check()
+        elif a.cmd == "fail":
+            cmd_fail(a.run_url, a.what)
+    except Exception as e:
+        if a.cmd != "fail":
+            ERROR_FILE.write_text(f"{type(e).__name__}: {e}\n\n" + "".join(traceback.format_exc()[-1200:]),
+                                  encoding="utf-8")
+        raise
 
 
 if __name__ == "__main__":

@@ -1,0 +1,46 @@
+name: Obavijesti (objavljeno + pregledi)
+
+on:
+  # RASPORED ISKLJUČEN dok se ne potvrde test videi.
+  # schedule:
+  #   - cron: "15 */4 * * *"   # svaka 4 sata (Buffer API limit)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: clipper-state
+  cancel-in-progress: false
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q requests yt-dlp
+      - name: Provjeri objave i preglede
+        run: python -m clipper.main links
+      - name: Spremi posted.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add posted.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Obavijesti: ažuriran posted.json"
+          for i in 1 2 3; do git pull --rebase -q && git push -q && exit 0; sleep 5; done
+          exit 1
+      - name: Obavijest o grešci
+        if: failure()
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python -m clipper.main fail --run-url "$RUN_URL" --what "Provjera objava"

@@ -1,0 +1,109 @@
+name: Objavi Twitch klip
+
+# 3x dnevno (14:00, 20:00, 22:00 po zagrebačkom, termini u config.json): uzme najbolji neobjavljeni
+# Twitch klip, montira ga i zakaže u Bufferu za taj termin (± nasumični pomak).
+# GitHub cron je u UTC-u, pa se pokreće svaki sat oko termina (ljetno i zimsko vrijeme);
+# korak "gate" odluči je li sad stvarno vrijeme, inače ništa ne radi.
+
+on:
+  # RASPORED ISKLJUČEN dok se ne potvrde test videi.
+  # schedule:
+  #   - cron: "20 11,12,17,18,19,20 * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Test: napravi videe kao artifact, NE objavljuj"
+        type: boolean
+        default: true
+      broj:
+        description: "Koliko test videa"
+        default: "3"
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      termin: ${{ steps.g.outputs.termin }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: g
+        env:
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' && '--manual' || '' }}
+          TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
+        run: |
+          if [ "$TEST" = "true" ]; then echo "termin=test" >> "$GITHUB_OUTPUT"; exit 0; fi
+          python3 -m clipper.main gate $MANUAL
+
+  klip:
+    needs: gate
+    if: needs.gate.outputs.termin != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: clipper-state
+      cancel-in-progress: false
+    env:
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+      TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+      BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+      CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+      TERMIN: ${{ needs.gate.outputs.termin }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Instaliraj ffmpeg i font
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          mkdir -p fonts
+          curl -sSfL -o fonts/Anton-Regular.ttf \
+            https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf || rm -f fonts/Anton-Regular.ttf
+      - run: pip install -r requirements.txt
+      - name: Whisper model iz cachea
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: whisper-small
+
+      - name: Test – napravi videe (bez objave)
+        if: env.TERMIN == 'test'
+        env:
+          BROJ: ${{ inputs.broj }}
+        run: python -m clipper.main run --test "${BROJ:-3}"
+      - name: Spremi test videe
+        if: env.TERMIN == 'test'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-videi
+          path: out/
+          retention-days: 14
+          compression-level: 0
+
+      - name: Napravi klip i zakaži u Bufferu
+        if: env.TERMIN != 'test'
+        run: python -m clipper.main run --termin "$TERMIN"
+      - name: Spremi posted.json
+        if: env.TERMIN != 'test'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add posted.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Objavljen klip za termin $TERMIN"
+          for i in 1 2 3; do git pull --rebase -q && git push -q && exit 0; sleep 5; done
+          exit 1
+
+      - name: Obavijest o grešci
+        if: failure()
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python -m clipper.main fail --run-url "$RUN_URL" --what "Objava klipa ($TERMIN)"

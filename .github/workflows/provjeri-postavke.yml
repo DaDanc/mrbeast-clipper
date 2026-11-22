@@ -1,4 +1,4 @@
-name: 0. Provjeri postavke
+name: Provjeri postavke
 
 on:
   workflow_dispatch:
@@ -11,16 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      PYTHONUNBUFFERED: "1"
+      TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+      TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
       CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install pyyaml requests cloudinary
-      - name: Provjera
-        run: python -m clipper.main check
+      - run: pip install -q requests cloudinary
+      - run: python -m clipper.main check

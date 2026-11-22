@@ -1,0 +1,39 @@
+{
+  "streameri": [
+    {
+      "login": "jynxzi",
+      "ime": "Jynxzi",
+      "min_pregleda": 1000,
+      "hashtagovi": "#jynxzi #r6 #rainbowsix #twitch #streamer #fyp",
+      "facecam": null
+    },
+    {
+      "login": "caseoh_",
+      "ime": "CaseOh",
+      "min_pregleda": 1000,
+      "hashtagovi": "#caseoh #caseohgames #twitch #streamer #funny #fyp",
+      "facecam": { "x": 0.0, "y": 0.13, "w": 0.208, "h": 0.27 }
+    }
+  ],
+
+  "dana_unazad": 7,
+  "min_sekundi": 10,
+  "max_sekundi": 60,
+  "jezik": "en",
+  "blokirane_rijeci": ["nude", "nudes", "naked", "nsfw", "shaft", "porn", "sex", "boob", "boobs", "dick", "titty", "titties"],
+
+  "whisper_model": "small",
+  "hook_sekundi": 2.8,
+  "hook_max_rijeci": 6,
+
+  "opis_posta": "{hook}\n\n🎥 twitch.tv/{login}\n{hashtagovi}",
+
+  "platforme": ["tiktok"],
+  "vremenska_zona": "Europe/Zagreb",
+  "termini": ["14:00", "20:00", "22:00"],
+  "pomak_minuta": 8,
+
+  "obavijest_za_svaku_objavu": false,
+  "obavijest_pregledi": [500, 1000, 5000],
+  "prati_dana": 7
+}

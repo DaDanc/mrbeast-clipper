@@ -21,7 +21,7 @@ def upload(path: Path, public_id: str) -> str:
         str(path),
         resource_type="video",
         public_id=public_id,
-        folder="mrbeast-clips",
+        folder="twitch-clips",
         overwrite=True,
         chunk_size=20_000_000,
     )
