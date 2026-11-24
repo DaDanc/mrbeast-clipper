@@ -50,6 +50,57 @@
       "link": "https://tiktok.com/@beastgodclipgod/video/7711124740269755680",
       "obavijest": true,
       "pregledi_obavijesti": []
+    },
+    {
+      "id": "EvilKindChamoisFreakinStinkin-_Q6h9MGvEezIzSw0",
+      "streamer": "jynxzi",
+      "naslov": "Jynxy plays gta6 for the first time",
+      "hook": "Jynxy plays gta6 for the first",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/EvilKindChamoisFreakinStinkin-_Q6h9MGvEezIzSw0",
+      "pregleda_twitch": 15949,
+      "termin": "2026-11-25 12:25",
+      "zakazano": "2026-11-25T12:25:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795496917/twitch-clips/jynxzi-EvilKindChamoisFreakinStinkin-_Q6h9MGvEezIzSw0.mp4",
+      "buffer": {
+        "6b051bd8f0d7b1e0deb31d1c": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "MoldySmoggyDonkeyThisIsSparta-mXBDQ8JcdmTZV7p5",
+      "streamer": "jynxzi",
+      "naslov": "GYATT",
+      "hook": "GYATT",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/MoldySmoggyDonkeyThisIsSparta-mXBDQ8JcdmTZV7p5",
+      "pregleda_twitch": 4989,
+      "termin": "2026-11-25 14:36",
+      "zakazano": "2026-11-25T14:36:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795496950/twitch-clips/jynxzi-MoldySmoggyDonkeyThisIsSparta-mXBDQ8JcdmTZV7p5.mp4",
+      "buffer": {
+        "6b051bf8db52b449cf291bab": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "GentleQuaintLegHassaanChop-ueu8bpOBC5We_Uu8",
+      "streamer": "jynxzi",
+      "naslov": "what does that witd mean brio",
+      "hook": "what does that witd mean brio",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/GentleQuaintLegHassaanChop-ueu8bpOBC5We_Uu8",
+      "pregleda_twitch": 3250,
+      "termin": "2026-11-25 22:07",
+      "zakazano": "2026-11-25T22:07:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795496968/twitch-clips/jynxzi-GentleQuaintLegHassaanChop-ueu8bpOBC5We_Uu8.mp4",
+      "buffer": {
+        "6b051c0abc151fa8ad25e281": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
     }
   ]
 }
