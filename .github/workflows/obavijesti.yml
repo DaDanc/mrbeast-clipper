@@ -3,6 +3,7 @@ name: Obavijesti (objavljeno + pregledi)
 on:
   schedule:
     - cron: "15 */4 * * *"   # svaka 4 sata (Buffer API limit)
+    - cron: "7 12 * * *"     # provjera: je li za danas išta zakazano do 12:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -27,6 +28,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -q requests yt-dlp
+      - name: Upozorenje ako za danas nije zakazano ništa (od 12:00 UTC)
+        run: python -m clipper.main upozori
       - name: Provjeri objave i preglede
         run: python -m clipper.main links
       - name: Spremi posted.json

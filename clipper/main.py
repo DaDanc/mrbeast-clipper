@@ -1,6 +1,8 @@
 """Twitch → TikTok clipper. Pokreću ga GitHub Actions workflowi.
 
-  python -m clipper.main gate                 -> je li sad vrijeme za objavu (ispisuje termin)
+  python -m clipper.main dan [--datum sutra]  -> zakaži sve današnje (sutrašnje) objave odjednom u Bufferu
+  python -m clipper.main dan --provjeri       -> treba li uopće raditi (idempotentnost, bez paketa)
+  python -m clipper.main upozori              -> obavijest ako do 12:00 UTC za danas nije zakazano ništa
   python -m clipper.main run --termin T       -> odaberi klip, montiraj, pošalji u Buffer za termin T
   python -m clipper.main run --test 3         -> napravi 3 videa u mapu out/ (bez objave)
   python -m clipper.main links                -> obavijest kad je klip objavljen + pregledi
@@ -107,13 +109,6 @@ def day_slots(d) -> list[datetime]:
     return [datetime(d.year, d.month, d.day, t // 60, t % 60, tzinfo=TZ) for t in ts]
 
 
-def _slots_around(now: datetime) -> list[datetime]:
-    out = []
-    for day in (-1, 0, 1, 2):
-        out += day_slots((now + timedelta(days=day)).date())
-    return sorted(out)
-
-
 def slot_key(slot: datetime) -> str:
     return slot.strftime("%Y-%m-%d %H:%M")
 
@@ -128,28 +123,125 @@ def posts_on(day, state: dict) -> int:
                if datetime.fromisoformat(e["zakazano"]).astimezone(TZ).date() == day)
 
 
-def cmd_gate(manual: bool) -> None:
-    """Zakazani run (svaki sat): termin koji je za 0-75 min (ili do 20 min prošao, ako GitHub kasni).
-    Ručni run: sljedeći slobodan termin. Dan koji već ima `objave_dnevno` objava se preskače.
-    Ispisuje termin u GITHUB_OUTPUT (prazno = ništa)."""
+def target_day(datum: str):
     now = datetime.now(TZ)
-    state = load_state()
+    if datum in ("", "danas"):
+        return now.date()
+    if datum == "sutra":
+        return (now + timedelta(days=1)).date()
+    return datetime.strptime(datum, "%Y-%m-%d").date()
+
+
+def open_slots(day, state: dict) -> list[datetime]:
+    """Termini dana `day` koji još nemaju objavu (najviše koliko fali do `objave_dnevno`)."""
+    need = int(CFG.get("objave_dnevno", 3)) - posts_on(day, state)
+    if need <= 0:
+        return []
     taken = {e.get("termin") for e in state["objavljeno"]}
-    per_day = int(CFG.get("objave_dnevno", 3))
-    print("Današnji termini: " + ", ".join(f"{s:%H:%M}" for s in day_slots(now.date())))
-    pick = ""
-    for s in _slots_around(now):
-        if slot_key(s) in taken or posts_on(s.date(), state) >= per_day:
-            continue
-        diff = (s - now).total_seconds() / 60
-        if (manual and diff > 5) or (-20 <= diff <= 75):
-            pick = slot_key(s)
-            break
-    print(f"Sad je {now:%d.%m. %H:%M} → termin: {pick or 'nijedan (ništa ne radim)'}")
+    return [s for s in day_slots(day) if slot_key(s) not in taken][:need]
+
+
+def free_time(slot: datetime, state: dict, now: datetime) -> datetime:
+    """Vrijeme objave za termin: sam termin, a ako je prošao (ili je preblizu) – najbliže sljedeće
+    slobodno vrijeme istog dana, uz razmak od ostalih objava tog dana (razmak se smanjuje ako ne stane)."""
+    day = slot.date()
+    end = datetime(day.year, day.month, day.day, 23, 55, tzinfo=TZ)
+    base = max(slot, now + timedelta(minutes=15)).replace(second=0, microsecond=0)
+    others = sorted(datetime.fromisoformat(e["zakazano"]).astimezone(TZ) for e in state["objavljeno"]
+                    if datetime.fromisoformat(e["zakazano"]).astimezone(TZ).date() == day)
+    cfg_gap = int(CFG.get("min_razmak_minuta", 120))
+    for gap in (cfg_gap, cfg_gap // 2, 30, 0):
+        g, t = timedelta(minutes=gap), base
+        moved = True
+        while moved:
+            moved = False
+            for o in others:
+                if abs(t - o) < g:
+                    t, moved = o + g, True
+        if t <= end:
+            return t
+    return min(base, end) if base <= end else base
+
+
+def _gh_output(**kw: str) -> None:
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
         with open(out, "a", encoding="utf-8") as f:
-            f.write(f"termin={pick}\n")
+            for k, v in kw.items():
+                f.write(f"{k}={v}\n")
+
+
+def cmd_dan(datum: str, provjeri: bool) -> None:
+    """Zakaži sve preostale objave za dan (danas ili sutra) odjednom u Bufferu.
+    Idempotentno: ako dan već ima `objave_dnevno` objava u posted.json, ništa ne radi.
+    S --provjeri samo ispiše treba li raditi (GITHUB_OUTPUT treba=1/0) – bez ikakvih paketa."""
+    day = target_day(datum)
+    state = load_state()
+    slots = open_slots(day, state)
+    print(f"Dan {day:%d.%m.%Y}: termini " + ", ".join(f"{s:%H:%M}" for s in day_slots(day))
+          + f" | već zakazano {posts_on(day, state)}, fali {len(slots)}")
+    if provjeri:
+        _gh_output(treba="1" if slots else "0", datum=day.isoformat())
+        return
+    if not slots:
+        print("Sve objave za taj dan su već zakazane – ništa ne radim.")
+        return
+
+    posted_ids = {e["id"] for e in state["objavljeno"]}
+    per_streamer, api_errors = [], []
+    for st in CFG["streameri"]:
+        try:
+            per_streamer.append(candidates(st, posted_ids))
+        except Exception as e:  # Twitch greška za jednog streamera – probaj ostale
+            print(f"::warning::{st['login']}: {e}")
+            api_errors.append(f"{st['login']}: {e}")
+            per_streamer.append([])
+    if api_errors and not any(per_streamer):
+        raise RuntimeError("Twitch API greška:\n" + "\n".join(api_errors))
+    queue = [c for lst in per_streamer for c in lst]   # prvo glavni streamer, pa rezerva
+    if not queue:
+        raise RuntimeError("Nema nijednog klipa koji prolazi filtere (svi streameri, zadnjih "
+                           f"{CFG.get('dana_unazad', 7)} dana).")
+
+    errors, done = [], 0
+    for slot in slots:
+        while queue:
+            clip = queue.pop(0)
+            try:
+                video, hook = make_video(clip, WORK / clip["id"][:40])
+            except Exception as e:   # ako montaža jednog klipa pukne, probaj sljedeći
+                errors.append(f"{clip['url']}: {e}")
+                print(f"::warning::Klip nije uspio: {e}")
+                continue
+            now = datetime.now(TZ)
+            due = free_time(slot, state, now)
+            if due != slot:
+                print(f"::notice::Termin {slot:%H:%M} je prošao/zauzet → zakazujem za {due:%d.%m. %H:%M}")
+            _publish(clip, video, hook, due, now, state, termin=slot_key(slot))
+            done += 1
+            break
+    print(f"Zakazano {done}/{len(slots)} objava za {day:%d.%m.%Y}.")
+    if done < len(slots):
+        raise RuntimeError(f"Zakazano samo {done}/{len(slots)} objava za {day:%d.%m.%Y}.\n"
+                           + "\n".join(errors or ["nema dovoljno klipova koji prolaze filtere"]))
+
+
+def cmd_upozori() -> None:
+    """Od 12:00 UTC: ako za danas nije zakazano sve (posebno ako ništa), jedna obavijest dnevno."""
+    if datetime.now(timezone.utc).hour < 12:
+        print("Prije 12:00 UTC – ne provjeravam.")
+        return
+    day = datetime.now(TZ).date()
+    state = load_state()
+    n, per_day = posts_on(day, state), int(CFG.get("objave_dnevno", 3))
+    print(f"Danas ({day:%d.%m.}) zakazano {n}/{per_day}.")
+    if n >= per_day or state.get("upozorenje") == day.isoformat():
+        return
+    what = "**ništa nije zakazano**" if n == 0 else f"zakazano je samo **{n}/{per_day}** objava"
+    notify(f"{owner_mention()}⚠️ Za danas ({day:%d.%m.}) {what} do 12:00 UTC. Pokreni ručno: "
+           f"Actions → Objavi Twitch klip → Run workflow (isključi *Test*).")
+    state["upozorenje"] = day.isoformat()
+    save_state(state)
 
 
 # ---------------------------------------------------------------- odabir klipova
@@ -346,7 +438,8 @@ def _render_test(picks: list[dict]) -> None:
     print("\n".join(summary))
 
 
-def _publish(clip: dict, video: Path, hook: str, slot: datetime, now: datetime, state: dict) -> None:
+def _publish(clip: dict, video: Path, hook: str, slot: datetime, now: datetime, state: dict,
+             termin: str | None = None) -> None:
     from . import buffer, hosting
 
     st = clip["_streamer"]
@@ -369,7 +462,7 @@ def _publish(clip: dict, video: Path, hook: str, slot: datetime, now: datetime, 
         raise RuntimeError("Buffer nije prihvatio objavu: " + "; ".join(errs))
     state["objavljeno"].append({
         "id": clip["id"], "streamer": st["login"], "naslov": clip["title"], "hook": hook,
-        "twitch": clip["url"], "pregleda_twitch": clip["view_count"], "termin": slot_key(slot),
+        "twitch": clip["url"], "pregleda_twitch": clip["view_count"], "termin": termin or slot_key(slot),
         "zakazano": due.isoformat(), "video": url, "buffer": posts, "link": None,
         "obavijest": False, "pregledi_obavijesti": [],
     })
@@ -514,8 +607,10 @@ def cmd_ocisti(contains: str) -> None:
 def main() -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
-    g = sub.add_parser("gate")
-    g.add_argument("--manual", action="store_true")
+    d = sub.add_parser("dan")
+    d.add_argument("--datum", default="danas", help="danas | sutra | YYYY-MM-DD")
+    d.add_argument("--provjeri", action="store_true")
+    sub.add_parser("upozori")
     r = sub.add_parser("run")
     r.add_argument("--termin", default="")
     r.add_argument("--test", type=int, default=0)
@@ -531,8 +626,10 @@ def main() -> None:
 
     WORK.mkdir(exist_ok=True)
     try:
-        if a.cmd == "gate":
-            cmd_gate(a.manual)
+        if a.cmd == "dan":
+            cmd_dan(a.datum, a.provjeri)
+        elif a.cmd == "upozori":
+            cmd_upozori()
         elif a.cmd == "run":
             ids = [x.strip() for x in a.ids.replace(" ", ",").split(",") if x.strip()]
             if ids and a.test:

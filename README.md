@@ -7,7 +7,11 @@ računalo ne mora biti upaljeno.
 
 ## Kako radi
 
-1. **Objavi Twitch klip** (workflow) se pokreće svaki sat i radi samo kad je termin blizu:
+1. **Objavi Twitch klip** (workflow) se pokreće jednom dnevno rano ujutro (03:37 UTC) i odmah zakaže
+   SVE današnje objave u Bufferu za točna vremena. GitHub cron zna preskočiti runove, zato postoje rezervni
+   runovi (04:17, 06:47, 09:23, 11:53 UTC) – svaki odmah izađe ako su današnje objave već zakazane
+   (`posted.json`). Ako je termin već prošao, klip ide na najbliže sljedeće slobodno vrijeme tog dana.
+   Za svaki klip:
    - Twitch Helix API → top klipovi zadnjih 7 dana po pregledima, prvo Jynxzi, pa CaseOh
    - filteri: 10–60 s, engleski, dovoljno pregleda, bez zabranjenih riječi u naslovu,
      nije već objavljen (`posted.json`)
@@ -18,6 +22,7 @@ računalo ne mora biti upaljeno.
    - video na Cloudinary → Buffer ga zakaže za termin → ID klipa se upiše u `posted.json`
 2. **Obavijesti** (svaka 4 sata): kad Buffer objavi klip, u pinani Issue
    **📋 Objave na TikToku** stiže 🔔 s linkom; 🚀 kad TikTok prijeđe 500 / 1.000 / 5.000 pregleda.
+   Ako do 12:00 UTC za danas nije zakazano sve, stiže ⚠️ upozorenje.
 3. Ako bilo koji run padne (nema klipova, Twitch/Buffer greška, ffmpeg…) stiže ❌ obavijest
    s @mentionom i linkom na log.
 
@@ -36,7 +41,8 @@ Provjera: **Actions → Provjeri postavke → Run workflow** – mora završiti 
 
 **Actions → Objavi Twitch klip → Run workflow** (kvačica *Test* uključena, broj videa 3).
 Gotovi videi, sličice i opisi postova su na dnu stranice runa pod **Artifacts → test-videi**.
-Ako isključiš *Test*, ručni run odmah zakaže pravi klip za sljedeći slobodan termin.
+Ako isključiš *Test*, ručni run zakaže sve preostale današnje objave. Kvačica *sutra* zakaže sve objave
+za sutra (pravi postovi u Bufferu; sutrašnji automatski runovi tada ništa ne rade).
 U polje *klipovi* možeš upisati Twitch ID-jeve klipova (iz `opisi.txt` test runa): uz uključen *Test* napravi
 samo te videe (artifact), uz isključen *Test* ih objavi DANAS u nasumična vremena.
 

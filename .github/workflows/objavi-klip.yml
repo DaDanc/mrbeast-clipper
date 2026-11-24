@@ -1,14 +1,24 @@
 name: Objavi Twitch klip
 
-# 3x dnevno u nasumična vremena (config.json: objave_dnevno, prozor_objava, min_razmak_minuta):
-# uzme najbolji neobjavljeni Twitch klip, montira ga i zakaže u Bufferu za taj termin.
-# Pokreće se svaki sat; korak "gate" odluči je li unutar sljedećih ~75 min termin, inače ništa ne radi.
+# Jednom dnevno (rano ujutro) odabere 3 klipa, montira ih i SVA 3 odmah zakaže u Bufferu za današnje
+# nasumične termine (config.json: objave_dnevno, prozor_objava, min_razmak_minuta).
+# GitHub cron je "best effort" (zna preskočiti runove), zato ima još rezervnih runova tijekom jutra.
+# Svaki run je idempotentan: ako posted.json već ima sve današnje objave, odmah izađe.
+# Ako je termin već prošao kad run krene, klip ide na najbliže sljedeće slobodno vrijeme danas.
 
 on:
   schedule:
-    - cron: "20 * * * *"
+    - cron: "37 3 * * *"    # glavni dnevni run
+    - cron: "17 4 * * *"    # rezerve
+    - cron: "47 6 * * *"
+    - cron: "23 9 * * *"
+    - cron: "53 11 * * *"
   workflow_dispatch:
     inputs:
+      sutra:
+        description: "Zakaži sve objave za SUTRA u Bufferu (pravi postovi; sutrašnji runovi onda ništa ne rade)"
+        type: boolean
+        default: false
       test:
         description: "Test: napravi videe kao artifact, NE objavljuj"
         type: boolean
@@ -25,28 +35,9 @@ permissions:
   issues: write
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      termin: ${{ steps.g.outputs.termin }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: g
-        env:
-          MANUAL: ${{ github.event_name == 'workflow_dispatch' && '--manual' || '' }}
-          TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
-          IDS: ${{ inputs.klipovi }}
-        run: |
-          if [ "$TEST" = "true" ]; then echo "termin=test" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if [ -n "$IDS" ]; then echo "termin=ids" >> "$GITHUB_OUTPUT"; exit 0; fi
-          python3 -m clipper.main gate $MANUAL
-
   klip:
-    needs: gate
-    if: needs.gate.outputs.termin != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     concurrency:
       group: clipper-state
       cancel-in-progress: false
@@ -57,34 +48,59 @@ jobs:
       TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
       CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
-      TERMIN: ${{ needs.gate.outputs.termin }}
     steps:
       - uses: actions/checkout@v4
+      - name: Što treba napraviti
+        id: m
+        env:
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+          SUTRA: ${{ inputs.sutra }}
+          TEST: ${{ inputs.test }}
+          IDS: ${{ inputs.klipovi }}
+        run: |
+          if [ "$MANUAL" = "true" ] && [ "$SUTRA" = "true" ]; then MODE=dan; DATUM=sutra
+          elif [ "$MANUAL" = "true" ] && [ "$TEST" = "true" ]; then MODE=test
+          elif [ -n "$IDS" ]; then MODE=ids
+          else MODE=dan; DATUM=danas; fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          if [ "$MODE" = "dan" ]; then
+            python3 -m clipper.main dan --datum "$DATUM" --provjeri   # upiše treba=0/1 i datum
+          else
+            echo "treba=1" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Već zakazano – ništa ne radim
+        if: steps.m.outputs.treba != '1'
+        run: echo "::notice::Sve objave za ${{ steps.m.outputs.datum }} su već zakazane u Bufferu."
+
       - uses: actions/setup-python@v5
+        if: steps.m.outputs.treba == '1'
         with:
           python-version: "3.11"
           cache: pip
       - name: Instaliraj ffmpeg i font
+        if: steps.m.outputs.treba == '1'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           mkdir -p fonts
           curl -sSfL -o fonts/Anton-Regular.ttf \
             https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf || rm -f fonts/Anton-Regular.ttf
-      - run: pip install -r requirements.txt
+      - if: steps.m.outputs.treba == '1'
+        run: pip install -r requirements.txt
       - name: Whisper model iz cachea
+        if: steps.m.outputs.treba == '1'
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
           key: whisper-small
 
       - name: Test – napravi videe (bez objave)
-        if: env.TERMIN == 'test'
+        if: steps.m.outputs.mode == 'test'
         env:
           BROJ: ${{ inputs.broj }}
           IDS: ${{ inputs.klipovi }}
         run: python -m clipper.main run --test "${BROJ:-3}" --ids "$IDS"
       - name: Spremi test videe
-        if: env.TERMIN == 'test'
+        if: steps.m.outputs.mode == 'test'
         uses: actions/upload-artifact@v4
         with:
           name: test-videi
@@ -93,21 +109,21 @@ jobs:
           compression-level: 0
 
       - name: Objavi zadane klipove danas
-        if: env.TERMIN == 'ids'
+        if: steps.m.outputs.mode == 'ids'
         env:
           IDS: ${{ inputs.klipovi }}
         run: python -m clipper.main run --ids "$IDS"
-      - name: Napravi klip i zakaži u Bufferu
-        if: env.TERMIN != 'test' && env.TERMIN != 'ids'
-        run: python -m clipper.main run --termin "$TERMIN"
+      - name: Napravi klipove i zakaži sve u Bufferu
+        if: steps.m.outputs.mode == 'dan' && steps.m.outputs.treba == '1'
+        run: python -m clipper.main dan --datum "${{ steps.m.outputs.datum }}"
       - name: Spremi posted.json
-        if: always() && env.TERMIN != 'test' && env.TERMIN != ''
+        if: always() && steps.m.outputs.mode != 'test' && steps.m.outputs.treba == '1'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add posted.json
           git diff --cached --quiet && exit 0
-          git commit -m "Objavljen klip za termin $TERMIN"
+          git commit -m "Zakazani klipovi za ${{ steps.m.outputs.datum || 'danas' }}"
           for i in 1 2 3; do git pull --rebase -q && git push -q && exit 0; sleep 5; done
           exit 1
 
@@ -115,4 +131,4 @@ jobs:
         if: failure()
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: python -m clipper.main fail --run-url "$RUN_URL" --what "Objava klipa ($TERMIN)"
+        run: python3 -m clipper.main fail --run-url "$RUN_URL" --what "Objava klipova (${{ steps.m.outputs.mode }} ${{ steps.m.outputs.datum }})"
