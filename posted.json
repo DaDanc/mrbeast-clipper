@@ -101,6 +101,57 @@
       "link": null,
       "obavijest": false,
       "pregledi_obavijesti": []
+    },
+    {
+      "id": "VenomousKathishAardvarkKappaWealth-Hxj1rxekaa3BsOQn",
+      "streamer": "jynxzi",
+      "naslov": "mandy gets crazy",
+      "hook": "mandy gets crazy",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/VenomousKathishAardvarkKappaWealth-Hxj1rxekaa3BsOQn",
+      "pregleda_twitch": 3109,
+      "termin": "2026-11-24 14:13",
+      "zakazano": "2026-11-24T19:37:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795544570/twitch-clips/jynxzi-VenomousKathishAardvarkKappaWealth-Hxj1rxekaa3BsOQn.mp4",
+      "buffer": {
+        "6b05d5fc04f9f3a5e6047d2d": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "SparklingDeliciousElephantDuDudu-7ZtEIG3eWcRoA8BV",
+      "streamer": "jynxzi",
+      "naslov": "jynxzi checks on nickeh30",
+      "hook": "jynxzi checks on nickeh30",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/SparklingDeliciousElephantDuDudu-7ZtEIG3eWcRoA8BV",
+      "pregleda_twitch": 2803,
+      "termin": "2026-11-24 18:38",
+      "zakazano": "2026-11-24T21:37:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795544604/twitch-clips/jynxzi-SparklingDeliciousElephantDuDudu-7ZtEIG3eWcRoA8BV.mp4",
+      "buffer": {
+        "6b05d61dbd6e90a32821e567": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "MagnificentCleanOctopusArgieB8-D1H7MwN0n-HRG6sU",
+      "streamer": "jynxzi",
+      "naslov": "junkos opinion on GTA 6 story compared to GTA5 and RDR2",
+      "hook": "junkos opinion on GTA 6 story",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/MagnificentCleanOctopusArgieB8-D1H7MwN0n-HRG6sU",
+      "pregleda_twitch": 2751,
+      "termin": "2026-11-24 22:14",
+      "zakazano": "2026-11-24T23:37:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795544654/twitch-clips/jynxzi-MagnificentCleanOctopusArgieB8-D1H7MwN0n-HRG6sU.mp4",
+      "buffer": {
+        "6b05d6503f48af62c22939c8": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
     }
   ],
   "upozorenje": "2026-11-24"
