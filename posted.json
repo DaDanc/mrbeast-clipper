@@ -82,7 +82,7 @@
         "6b051bf8db52b449cf291bab": "tiktok"
       },
       "link": null,
-      "obavijest": false,
+      "obavijest": true,
       "pregledi_obavijesti": []
     },
     {
@@ -98,8 +98,8 @@
       "buffer": {
         "6b051c0abc151fa8ad25e281": "tiktok"
       },
-      "link": null,
-      "obavijest": false,
+      "link": "https://tiktok.com/@beastgodclipgod/video/7712218657019006247",
+      "obavijest": true,
       "pregledi_obavijesti": []
     },
     {
