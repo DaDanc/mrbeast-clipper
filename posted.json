@@ -152,6 +152,57 @@
       "link": "https://tiktok.com/@beastgodclipgod/video/7711870727791709479",
       "obavijest": true,
       "pregledi_obavijesti": []
+    },
+    {
+      "id": "SmokyTentativeLegOMGScoots-vJFQwQ-sp_-ZWPrS",
+      "streamer": "jynxzi",
+      "naslov": "Levy sees everything",
+      "hook": "Levy sees everything",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/SmokyTentativeLegOMGScoots-vJFQwQ-sp_-ZWPrS",
+      "pregleda_twitch": 4411,
+      "termin": "2026-11-26 13:15",
+      "zakazano": "2026-11-26T14:19:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795698298/twitch-clips/jynxzi-SmokyTentativeLegOMGScoots-vJFQwQ-sp_-ZWPrS.mp4",
+      "buffer": {
+        "6b082e7c3f4b65b6c4b23443": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "AmazonianResilientPidgeonOpieOP-ojuPXiAozxg-bHup",
+      "streamer": "jynxzi",
+      "naslov": "goon rocket",
+      "hook": "goon rocket",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/AmazonianResilientPidgeonOpieOP-ojuPXiAozxg-bHup",
+      "pregleda_twitch": 3636,
+      "termin": "2026-11-26 17:33",
+      "zakazano": "2026-11-26T17:33:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795698325/twitch-clips/jynxzi-AmazonianResilientPidgeonOpieOP-ojuPXiAozxg-bHup.mp4",
+      "buffer": {
+        "6b082e9821c680d3d8779940": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "BrightLightKoupreyDatBoi-I6MNlJS_PJzy-MCc",
+      "streamer": "jynxzi",
+      "naslov": "bro got sent a hard sock 😭✌️",
+      "hook": "bro got sent a hard sock",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/BrightLightKoupreyDatBoi-I6MNlJS_PJzy-MCc",
+      "pregleda_twitch": 3182,
+      "termin": "2026-11-26 20:04",
+      "zakazano": "2026-11-26T20:04:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795698348/twitch-clips/jynxzi-BrightLightKoupreyDatBoi-I6MNlJS_PJzy-MCc.mp4",
+      "buffer": {
+        "6b082eae21c680d3d877a7e7": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
     }
   ],
   "upozorenje": "2026-11-24"
