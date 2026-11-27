@@ -203,6 +203,57 @@
       "link": "https://tiktok.com/@beastgodclipgod/video/7712558430275341601",
       "obavijest": true,
       "pregledi_obavijesti": []
+    },
+    {
+      "id": "LittleBombasticPangolinDoubleRainbow-85e1yrxtRC0l2Gra",
+      "streamer": "jynxzi",
+      "naslov": "NAH JYNXZI",
+      "hook": "JYNXZI",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/LittleBombasticPangolinDoubleRainbow-85e1yrxtRC0l2Gra",
+      "pregleda_twitch": 4828,
+      "termin": "2026-11-27 12:18",
+      "zakazano": "2026-11-27T14:17:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795784564/twitch-clips/jynxzi-LittleBombasticPangolinDoubleRainbow-85e1yrxtRC0l2Gra.mp4",
+      "buffer": {
+        "6b097f77776ce212761be063": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "WrongDeadBubbleteaImGlitch-p5Ab6ItFQKshiBQl",
+      "streamer": "jynxzi",
+      "naslov": "HOLY CHECKMATE",
+      "hook": "HOLY CHECKMATE",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/WrongDeadBubbleteaImGlitch-p5Ab6ItFQKshiBQl",
+      "pregleda_twitch": 3852,
+      "termin": "2026-11-27 15:03",
+      "zakazano": "2026-11-27T16:17:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795784596/twitch-clips/jynxzi-WrongDeadBubbleteaImGlitch-p5Ab6ItFQKshiBQl.mp4",
+      "buffer": {
+        "6b097f96062ed764a8180258": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "EndearingOnerousRaisinFutureMan-RtR1TqzIbSyR65mP",
+      "streamer": "jynxzi",
+      "naslov": "jynxzi reacts to Lucia booty",
+      "hook": "jynxzi reacts to Lucia booty",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/EndearingOnerousRaisinFutureMan-RtR1TqzIbSyR65mP",
+      "pregleda_twitch": 1741,
+      "termin": "2026-11-27 18:13",
+      "zakazano": "2026-11-27T18:17:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795784624/twitch-clips/jynxzi-EndearingOnerousRaisinFutureMan-RtR1TqzIbSyR65mP.mp4",
+      "buffer": {
+        "6b097fb2658222306c14df2f": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
     }
   ],
   "upozorenje": "2026-11-24"
