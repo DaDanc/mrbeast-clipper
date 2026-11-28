@@ -254,6 +254,57 @@
       "link": "https://tiktok.com/@beastgodclipgod/video/7712901563278232871",
       "obavijest": true,
       "pregledi_obavijesti": []
+    },
+    {
+      "id": "IronicProtectiveSowCharlieBitMe-CGMz8mw2mmrwF9-d",
+      "streamer": "jynxzi",
+      "naslov": "baaaaaaaah",
+      "hook": "baah",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/IronicProtectiveSowCharlieBitMe-CGMz8mw2mmrwF9-d",
+      "pregleda_twitch": 2259,
+      "termin": "2026-11-28 14:18",
+      "zakazano": "2026-11-28T14:18:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795868105/twitch-clips/jynxzi-IronicProtectiveSowCharlieBitMe-CGMz8mw2mmrwF9-d.mp4",
+      "buffer": {
+        "6b0ac5cbb793a21e71dff7c4": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "HelplessTransparentVampirePJSugar-i5IJFIkH7MfcZB8l",
+      "streamer": "jynxzi",
+      "naslov": "Hello?",
+      "hook": "Hello?",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/HelplessTransparentVampirePJSugar-i5IJFIkH7MfcZB8l",
+      "pregleda_twitch": 1873,
+      "termin": "2026-11-28 16:53",
+      "zakazano": "2026-11-28T16:53:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795868126/twitch-clips/jynxzi-HelplessTransparentVampirePJSugar-i5IJFIkH7MfcZB8l.mp4",
+      "buffer": {
+        "6b0ac5dfbe536564e429ae87": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
+    },
+    {
+      "id": "DeadSpikyDonkeyRuleFive-e0GrGpXt9WjyBYQD",
+      "streamer": "jynxzi",
+      "naslov": "boobies",
+      "hook": "boobies",
+      "twitch": "https://www.twitch.tv/jynxzi/clip/DeadSpikyDonkeyRuleFive-e0GrGpXt9WjyBYQD",
+      "pregleda_twitch": 1692,
+      "termin": "2026-11-28 21:55",
+      "zakazano": "2026-11-28T21:55:00+01:00",
+      "video": "https://res.cloudinary.com/lewwo8mz/video/upload/v1795868141/twitch-clips/jynxzi-DeadSpikyDonkeyRuleFive-e0GrGpXt9WjyBYQD.mp4",
+      "buffer": {
+        "6b0ac5efb8ec87c6cec27db8": "tiktok"
+      },
+      "link": null,
+      "obavijest": false,
+      "pregledi_obavijesti": []
     }
   ],
   "upozorenje": "2026-11-24"
